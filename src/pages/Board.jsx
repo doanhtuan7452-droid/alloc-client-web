@@ -8,7 +8,7 @@ export default function Board() {
           <div className="flex items-center gap-2 text-xs font-mono text-slate-400 mb-2">
             <span>WORKSPACES</span>
             <span>›</span>
-            <span>THESIS PROJECT ALPHA</span>
+            <span>Alloc</span>
           </div>
           <div className="flex items-center gap-4">
             <h1 className="text-3xl font-bold">Data Synthesis & Review</h1>

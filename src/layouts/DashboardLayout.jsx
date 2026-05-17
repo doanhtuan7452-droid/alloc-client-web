@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { Home, Layers, Users, Settings, HelpCircle, Plus } from "lucide-react";
+import {
+  Home,
+  Layers,
+  Users,
+  Settings,
+  HelpCircle,
+  Plus,
+  MessageSquare,
+} from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 
 const Sidebar = () => {
@@ -12,7 +20,7 @@ const Sidebar = () => {
           </div>
           <div>
             <h1 className="text-white font-bold text-lg leading-tight">
-              Thesis OS
+              Alloc
             </h1>
             <p className="text-xs text-slate-400 font-mono tracking-wider">
               EXECUTIVE MANAGEMENT
@@ -54,6 +62,14 @@ const Sidebar = () => {
             }
           >
             <Users className="w-4 h-4" /> Members
+          </NavLink>
+          <NavLink
+            to="/conversations"
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? "bg-[#1f2937] text-white" : "text-slate-400 hover:text-white hover:bg-[#1f2937]"}`
+            }
+          >
+            <MessageSquare className="w-4 h-4" /> Conversations
           </NavLink>
         </nav>
       </div>
