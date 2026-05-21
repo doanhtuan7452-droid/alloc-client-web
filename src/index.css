@@ -1,9 +1,9 @@
 ﻿@import "tailwindcss";
 
 :root {
-  --bg-dark: #090e17;
-  --bg-sidebar: #131b2c;
-  --bg-card: #141c2c;
+  --bg-dark: #000000;
+  --bg-sidebar: #0a0a0a;
+  --bg-card: #111111;
   --text-primary: #e2e8f0;
   --text-secondary: #94a3b8;
   --accent-blue: #3b82f6;
@@ -16,4 +16,36 @@ body {
   color: var(--text-primary);
   font-family: Inter, system-ui, sans-serif;
   margin: 0;
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+
+/* Base custom scrollbar for entire body if needed */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #000000;
+}
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
 }
