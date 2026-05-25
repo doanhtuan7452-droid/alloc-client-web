@@ -1,16 +1,25 @@
-﻿import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import DashboardLayout from "./layouts/DashboardLayout";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import DashboardLayout from "./layouts/MainLayout";
 import ActiveProjects from "./pages/ActiveProjects";
 import Board from "./pages/Board";
 import Gantt from "./pages/Gantt";
 import Finance from "./pages/Finance";
 import Team from "./pages/Team";
 import Conversations from "./pages/Conversations";
+import LayoutLogin from "./layouts/LayoutLogin";
+import LoginOption from "./components/LoginOption";
+import LoginEmail from "./components/LoginEmail";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Khu vực test riêng cho Login */}
+        <Route path="/login-test" element={<LayoutLogin />}>
+          <Route index element={<LoginOption />} />
+          <Route path="email" element={<LoginEmail />} />
+        </Route>
+
         <Route path="/" element={<DashboardLayout />}>
           <Route index element={<Navigate to="/workspaces" replace />} />
           <Route path="workspaces" element={<ActiveProjects />} />

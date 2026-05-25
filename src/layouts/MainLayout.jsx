@@ -1,8 +1,8 @@
 import { Outlet } from "react-router-dom";
-import Sidebar from "../components/layout/Sidebar";
-import Topbar from "../components/layout/Topbar";
+import Sidebar from "../components/Sidebar";
+import Topbar from "../components/Topbar";
 
-export default function DashboardLayout() {
+export default function MainLayout() {
   return (
     <div className="flex h-screen bg-black text-white overflow-hidden">
       <Sidebar />

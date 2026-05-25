@@ -1,7 +1,7 @@
 ﻿import { Filter, MoreHorizontal, Plus } from "lucide-react";
-import SearchInput from "../components/ui/SearchInput";
-import TaskCard from "../components/ui/TaskCard";
-import BoardColumn from "../components/layout/BoardColumn";
+import SearchInput from "../components/SearchInput";
+import TaskCard from "../components/TaskCard";
+import BoardColumn from "../components/BoardColumn";
 
 export default function Board() {
   return (
