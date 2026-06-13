@@ -1,9 +1,8 @@
-import React from 'react';
 import { Outlet } from 'react-router-dom';
 
 const LayoutLogin = () => {
     return (
-        <div className="relative min-h-screen w-full flex justify-center items-center bg-[#191a1f] font-sans overflow-hidden">
+        <div className="relative min-h-screen w-full flex justify-center items-center bg-inset font-sans overflow-hidden">
 
             {/* Đốm sáng hiệu ứng phía trên bên trái (Lấy cảm hứng từ phong cách Stitch) */}
             <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-blue-500/10 blur-[120px] pointer-events-none" />
