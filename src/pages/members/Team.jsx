@@ -2,7 +2,8 @@ import { Download, Search, AlertTriangle, Calendar } from "lucide-react";
 
 export default function Team() {
   return (
-    <div className="max-w-6xl mx-auto pb-10">
+    <div className="flex-1 overflow-y-auto h-full p-4 md:p-6 custom-scrollbar">
+      <div className="max-w-6xl mx-auto pb-10">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold mb-2">Team Overview</h1>
@@ -284,9 +285,10 @@ export default function Team() {
             <span className="text-[10px] text-slate-500 font-mono tracking-widest">
               HIGH IMPACT
             </span>
-          </div>
         </div>
       </div>
     </div>
+  </div>
+</div>
   );
 }

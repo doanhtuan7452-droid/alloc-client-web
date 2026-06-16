@@ -1,13 +1,25 @@
+import { useState, useEffect } from 'react';
 import { Plus } from 'lucide-react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useSearchParams } from 'react-router-dom';
 import HomeIcon from '../icons/home-icon';
 import Stack3Icon from '../icons/stack-3-icon';
 import UsersIcon from '../icons/users-icon';
 import MessageCircleIcon from '../icons/message-circle-icon';
 import GearIcon from '../icons/gear-icon';
 import InfoCircleIcon from '../icons/info-circle-icon';
+import { fetchWorkspaces } from '../../services/mockApi';
 
 export default function Sidebar() {
+  const [searchParams] = useSearchParams();
+  const currentWorkspaceId = searchParams.get("workspaceId");
+  const [workspacesList, setWorkspacesList] = useState([]);
+
+  useEffect(() => {
+    fetchWorkspaces()
+      .then((data) => setWorkspacesList(data))
+      .catch((err) => console.error("Error fetching workspaces in sidebar:", err));
+  }, []);
+
   return (
     // Tăng chiều rộng lên w-56 để có không gian rộng rãi hơn
     <aside className="w-56 bg-white/10 backdrop-blur-md border border-white/10 rounded-md h-full flex flex-col justify-between shrink-0 overflow-hidden shadow-xl">
@@ -26,9 +38,26 @@ export default function Sidebar() {
             <Stack3Icon size={16} color="currentColor" /> Workspaces
           </NavLink>
 
-          <div className="pl-10 flex flex-col gap-2.5 mt-1.5 mb-2.5">
-            <div className="flex items-center gap-2.5 text-xs text-content-muted hover:text-white cursor-pointer transition-colors"><div className="w-1.5 h-1.5 rounded-full bg-blue-400"></div> Workspace A</div>
-            <div className="flex items-center gap-2.5 text-xs text-slate-500 hover:text-white cursor-pointer transition-colors"><div className="w-1.5 h-1.5 rounded-full bg-slate-600"></div> Workspace B</div>
+          <div className="pl-6 pr-2 flex flex-col gap-1 mt-1 mb-2.5">
+            {workspacesList.map((workspace) => {
+              // Set fallback check: if no workspaceId in URL, we don't force highlight here; ActiveProjects will handle redirection.
+              const isWorkspaceActive = currentWorkspaceId === workspace.workspaceId.toString();
+              const indicatorColor = workspace.type === "Company" ? "bg-blue-400" : "bg-purple-400";
+
+              return (
+                <NavLink
+                  key={workspace.workspaceId}
+                  to={`/workspaces?workspaceId=${workspace.workspaceId}`}
+                  className={`flex items-center gap-2.5 text-xs px-3 py-1.5 rounded-md transition-all ${isWorkspaceActive
+                      ? 'bg-neutral-800 text-white font-medium'
+                      : 'text-content-muted hover:text-white hover:bg-neutral-800/30'
+                    }`}
+                >
+                  <div className={`w-1.5 h-1.5 rounded-full ${indicatorColor} shrink-0`} />
+                  <span className="truncate">{workspace.name}</span>
+                </NavLink>
+              );
+            })}
           </div>
 
           <NavLink to="/members" className={({ isActive }) => `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all ${isActive ? 'bg-neutral-800 text-white' : 'text-content-muted hover:text-white hover:bg-neutral-800/50'}`}>
@@ -42,9 +71,9 @@ export default function Sidebar() {
 
       {/* Vùng Footer Actions thu gọn kích thước */}
       <div className="p-3 border-t border-white/10 bg-transparent">
-        <button className="flex items-center justify-center gap-2 w-full py-2.5 mb-2.5 bg-gradient-to-r from-blue-600/20 to-blue-600/40 border border-blue-500/30 text-blue-400 hover:text-blue-300 rounded-md text-sm font-medium transition-all">
+        {/* <button className="flex items-center justify-center gap-2 w-full py-2.5 mb-2.5 bg-gradient-to-r from-blue-600/20 to-blue-600/40 border border-blue-500/30 text-blue-400 hover:text-blue-300 rounded-md text-sm font-medium transition-all">
           <Plus className="w-4 h-4" /> New Research
-        </button>
+        </button> */}
         <div className="flex flex-col gap-0.5">
           <button className="flex items-center gap-3 px-3 py-2 rounded-md text-content-muted hover:text-white hover:bg-neutral-800/50 text-sm font-medium w-full text-left transition-all">
             <GearIcon size={16} color="currentColor" /> Settings

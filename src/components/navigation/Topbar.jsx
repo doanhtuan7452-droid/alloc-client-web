@@ -1,10 +1,16 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import { Search } from 'lucide-react';
 import logoAlloc from '../../assets/images/logo_alloc_267x329.png';
 import FilledBellIcon from '../icons/filled-bell-icon';
 
-export default function Topbar() {
+export default function Topbar({ searchQuery, setSearchQuery }) {
   const location = useLocation();
-  const showWorkspaceTabs = location.pathname.startsWith('/workspaces');
+
+  const isWorkspacesList = location.pathname === '/workspaces' || location.pathname === '/workspaces/';
+  const isWorkspaceBoard = location.pathname === '/workspaces/board' || location.pathname === '/workspaces/board/';
+
+  const showSearchBar = isWorkspacesList || isWorkspaceBoard;
+  const placeholderText = isWorkspacesList ? "Search projects..." : "Tìm mã hoặc tên công việc...";
 
   return (
     // Đồng bộ hiệu ứng glassmorphism với Outlet
@@ -20,18 +26,21 @@ export default function Topbar() {
             <h1 className="text-content-primary font-bold text-base leading-tight tracking-wide">Alloc</h1>
           </div>
         </div>
-
-        {/* Đồng bộ kích thước text thành text-sm và khoảng cách tab xuống gap-5 */}
-        {showWorkspaceTabs && (
-          <div className="flex items-center gap-5 text-sm font-medium text-content-secondary">
-            <NavLink to="/workspaces/board" className={({ isActive }) => isActive ? "text-content-primary border-b-2 border-content-primary pb-0.5" : "hover:text-content-primary transition-colors"}>Board</NavLink>
-            <NavLink to="/workspaces/gantt" className={({ isActive }) => isActive ? "text-content-primary border-b-2 border-content-primary pb-0.5" : "hover:text-content-primary transition-colors"}>Gantt</NavLink>
-            <NavLink to="/workspaces/calendar" className={({ isActive }) => isActive ? "text-content-primary border-b-2 border-content-primary pb-0.5" : "hover:text-content-primary transition-colors"}>Calendar</NavLink>
-            <NavLink to="/workspaces/list" className={({ isActive }) => isActive ? "text-content-primary border-b-2 border-content-primary pb-0.5" : "hover:text-content-primary transition-colors"}>List</NavLink>
-            <NavLink to="/workspaces/finance" className={({ isActive }) => isActive ? "text-white border-b-2 border-content-primary pb-0.5" : "hover:text-content-primary transition-colors"}>Finance</NavLink>
-          </div>
-        )}
       </div>
+
+      {/* Thanh tìm kiếm chuyển từ các trang con lên Topbar */}
+      {showSearchBar && (
+        <div className="relative w-64 hidden sm:block">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" />
+          <input
+            type="text"
+            placeholder={placeholderText}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-white/[0.03] border border-white/10 rounded-md pl-9 pr-4 py-2 text-sm text-content-primary placeholder-slate-500 focus:outline-none focus:border-white/25 transition-colors"
+          />
+        </div>
+      )}
 
       {/* Khu vực góc phải tinh chỉnh lại kích thước tỉ lệ */}
       <div className="flex items-center gap-4">

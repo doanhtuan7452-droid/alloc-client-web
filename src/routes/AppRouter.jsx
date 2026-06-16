@@ -9,6 +9,7 @@ import Gantt from "../pages/workspaces/Gantt";
 import Finance from "../pages/workspaces/Finance";
 import Team from "../pages/members/Team";
 import Conversations from "../pages/conversations/Conversations";
+import WorkspaceLayout from "../layouts/WorkspaceLayout";
 
 export default function AppRouter() {
   return (
@@ -21,10 +22,20 @@ export default function AppRouter() {
 
       <Route path="/" element={<MainLayout />}>
         <Route index element={<Navigate to="/workspaces" replace />} />
-        <Route path="workspaces" element={<ActiveProjects />} />
-        <Route path="workspaces/board" element={<Board />} />
-        <Route path="workspaces/gantt" element={<Gantt />} />
-        <Route path="workspaces/finance" element={<Finance />} />
+        
+        {/* Nhóm định tuyến workspaces đồng nhất */}
+        <Route path="workspaces">
+          {/* URL: /workspaces -> Danh sách dự án */}
+          <Route index element={<ActiveProjects />} />
+          
+          {/* URL: /workspaces/board, /workspaces/gantt, /workspaces/finance -> Qua Layout chung */}
+          <Route element={<WorkspaceLayout />}>
+            <Route path="board" element={<Board />} />
+            <Route path="gantt" element={<Gantt />} />
+            <Route path="finance" element={<Finance />} />
+          </Route>
+        </Route>
+
         <Route path="members" element={<Team />} />
         <Route path="conversations" element={<Conversations />} />
         <Route
