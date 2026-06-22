@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Bell, Clock, Sparkles } from 'lucide-react';
 import { NavLink, useSearchParams } from 'react-router-dom';
 import HomeIcon from '../icons/home-icon';
 import Stack3Icon from '../icons/stack-3-icon';
@@ -65,6 +65,15 @@ export default function Sidebar() {
           </NavLink>
           <NavLink to="/conversations" className={({ isActive }) => `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all ${isActive ? 'bg-neutral-800 text-white' : 'text-content-muted hover:text-white hover:bg-neutral-800/50'}`}>
             <MessageCircleIcon size={16} color="currentColor" /> Conversations
+          </NavLink>
+          <NavLink to="/timesheets" className={({ isActive }) => `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all ${isActive ? 'bg-neutral-800 text-white' : 'text-content-muted hover:text-white hover:bg-neutral-800/50'}`}>
+            <Clock size={16} color="currentColor" /> Timesheets
+          </NavLink>
+          <NavLink to="/notifications" className={({ isActive }) => `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all ${isActive ? 'bg-neutral-800 text-white' : 'text-content-muted hover:text-white hover:bg-neutral-800/50'}`}>
+            <Bell size={16} color="currentColor" /> Notifications
+          </NavLink>
+          <NavLink to="/ai-insights" className={({ isActive }) => `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all ${isActive ? 'bg-neutral-800 text-white' : 'text-content-muted hover:text-white hover:bg-neutral-800/50'}`}>
+            <Sparkles size={16} color="currentColor" /> AI Insights
           </NavLink>
         </nav>
       </div>

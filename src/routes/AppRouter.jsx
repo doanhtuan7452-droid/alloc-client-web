@@ -10,6 +10,14 @@ import Finance from "../pages/workspaces/Finance";
 import Team from "../pages/members/Team";
 import Conversations from "../pages/conversations/Conversations";
 import WorkspaceLayout from "../layouts/WorkspaceLayout";
+import Risks from "../pages/workspaces/Risks";
+import Timesheets from "../pages/timesheets/Timesheets";
+import Register from "../features/auth/Register";
+import ForgotPassword from "../features/auth/ForgotPassword";
+import VerifyOTP from "../features/auth/VerifyOTP";
+import Profile from "../pages/profile/Profile";
+import Notifications from "../pages/notifications/Notifications";
+import AIInsights from "../pages/ai/AIInsights";
 
 export default function AppRouter() {
   return (
@@ -18,6 +26,9 @@ export default function AppRouter() {
       <Route path="/login-test" element={<LayoutLogin />}>
         <Route index element={<LoginOption />} />
         <Route path="email" element={<LoginEmail />} />
+        <Route path="register" element={<Register />} />
+        <Route path="forgot-password" element={<ForgotPassword />} />
+        <Route path="verify-otp" element={<VerifyOTP />} />
       </Route>
 
       <Route path="/" element={<MainLayout />}>
@@ -33,11 +44,16 @@ export default function AppRouter() {
             <Route path="board" element={<Board />} />
             <Route path="gantt" element={<Gantt />} />
             <Route path="finance" element={<Finance />} />
+            <Route path="risks" element={<Risks />} />
           </Route>
         </Route>
 
+        <Route path="timesheets" element={<Timesheets />} />
         <Route path="members" element={<Team />} />
+        <Route path="profile" element={<Profile />} />
         <Route path="conversations" element={<Conversations />} />
+        <Route path="notifications" element={<Notifications />} />
+        <Route path="ai-insights" element={<AIInsights />} />
         <Route
           path="*"
           element={
