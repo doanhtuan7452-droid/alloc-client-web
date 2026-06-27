@@ -37,6 +37,9 @@ export default function WorkspaceNav() {
       <NavLink to={`/workspaces/finance${queryStr}`} className={getTabClass}>
         Finance
       </NavLink>
+      <NavLink to={`/workspaces/members${queryStr}`} className={getTabClass}>
+        Members
+      </NavLink>
     </div>
   );
 }

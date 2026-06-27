@@ -6,8 +6,11 @@ import {
   fetchReviewCycles, fetchEvaluations
 } from "../../services/mockApi";
 
+import { useOutletContext } from "react-router-dom";
+
 export default function Team() {
-  const workspaceId = 12; // Mặc định dùng workspace ID 12 cho demo
+  // Nhận context từ WorkspaceLayout
+  const { workspaceId } = useOutletContext() || { workspaceId: 12 };
 
   const [members, setMembers] = useState([]);
   const [memberProfiles, setMemberProfiles] = useState({});

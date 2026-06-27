@@ -1,4 +1,4 @@
-import { useLocation } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import logoAlloc from '../../assets/images/logo_alloc_267x329.png';
 import FilledBellIcon from '../icons/filled-bell-icon';
@@ -44,10 +44,10 @@ export default function Topbar({ searchQuery, setSearchQuery }) {
 
       {/* Khu vực góc phải tinh chỉnh lại kích thước tỉ lệ */}
       <div className="flex items-center gap-4">
-        <button className="relative text-content-secondary hover:text-content-primary transition-colors flex items-center justify-center">
+        <Link to="/notifications" className="relative text-content-secondary hover:text-content-primary transition-colors flex items-center justify-center">
           <FilledBellIcon size={16} color="currentColor" />
           <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-cyan-400 rounded-full border border-header"></span>
-        </button>
+        </Link>
         <div className="w-7 h-7 rounded-md bg-slate-700 overflow-hidden border border-neutral-700 hover:border-white transition-colors cursor-pointer">
           <img src="https://i.pravatar.cc/150?u=a042581f4e29026704d" alt="User Avatar" className="w-full h-full object-cover" />
         </div>

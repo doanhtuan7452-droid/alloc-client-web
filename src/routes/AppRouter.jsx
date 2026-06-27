@@ -45,11 +45,11 @@ export default function AppRouter() {
             <Route path="gantt" element={<Gantt />} />
             <Route path="finance" element={<Finance />} />
             <Route path="risks" element={<Risks />} />
+            <Route path="members" element={<Team />} />
           </Route>
         </Route>
 
         <Route path="timesheets" element={<Timesheets />} />
-        <Route path="members" element={<Team />} />
         <Route path="profile" element={<Profile />} />
         <Route path="conversations" element={<Conversations />} />
         <Route path="notifications" element={<Notifications />} />
