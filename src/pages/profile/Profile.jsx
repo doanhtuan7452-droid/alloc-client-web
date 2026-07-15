@@ -1,13 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Camera, Save, Lock, User, Clock, Phone, MapPin } from 'lucide-react';
+import AuthService from '../../services/AuthService';
 
 export default function Profile() {
   const [profileData, setProfileData] = useState({
-    fullName: "Nguyễn Văn A",
-    email: "nguoidung@gmail.com",
-    phoneNumber: "0912 345 678",
-    location: "Hà Nội, Việt Nam",
-    timezone: "UTC+7 (SE Asia Standard Time)"
+    fullName: "Đang tải...",
+    email: "...",
+    phoneNumber: "...",
+    location: "Chưa cập nhật",
+    timezone: "...",
+    avatarUrl: "",
+    isSystemAccount: false,
+    accountStatus: "..."
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -15,6 +19,27 @@ export default function Profile() {
     newPassword: "",
     confirmPassword: ""
   });
+
+  // 🌟 Đổ dữ liệu thật từ endpoint API /accounts/me vào form
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const response = await AuthService.getCurrentUser();
+      if (response) {
+        const profile = response.profile || {};
+        setProfileData({
+          fullName: profile.fullName || "Chưa thiết lập tên",
+          email: response.email || "Không có dữ liệu",
+          phoneNumber: profile.phoneNumber || "Chưa cập nhật số điện thoại",
+          location: profile.timezone || "Việt Nam", 
+          timezone: profile.timezone || "Asia/Ho_Chi_Minh",
+          avatarUrl: profile.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.fullName || "U")}`,
+          isSystemAccount: response.isSystemAccount,
+          accountStatus: response.accountStatus
+        });
+      }
+    };
+    fetchUserData();
+  }, []);
 
   const handleProfileChange = (e) => {
     setProfileData({ ...profileData, [e.target.name]: e.target.value });
@@ -26,12 +51,12 @@ export default function Profile() {
 
   const handleSaveProfile = (e) => {
     e.preventDefault();
-    console.log("Mock Save Profile", profileData);
+    console.log("Submit cập nhật hồ sơ (sẽ dùng PUT API sau):", profileData);
   };
 
   const handleUpdatePassword = (e) => {
     e.preventDefault();
-    console.log("Mock Update Password", passwordData);
+    console.log("Submit đổi mật khẩu (sẽ dùng PUT API sau):", passwordData);
   };
 
   return (
@@ -56,7 +81,7 @@ export default function Profile() {
               <div className="relative mb-4 group cursor-pointer">
                 <div className="w-24 h-24 rounded-full bg-inset overflow-hidden border-4 border-border-default transition-all group-hover:border-blue-500/50">
                   <img
-                    src="https://ui-avatars.com/api/?name=NV"
+                    src={profileData.avatarUrl}
                     alt="User Avatar"
                     className="w-full h-full object-cover"
                   />
@@ -65,15 +90,15 @@ export default function Profile() {
                   <Camera className="w-6 h-6 text-white" />
                 </div>
               </div>
-              <h3 className="text-lg font-bold text-content-primary">{profileData.fullName}</h3>
-              <p className="text-xs text-content-muted mb-4">{profileData.email}</p>
+              <h3 className="text-lg font-bold text-content-primary text-center truncate w-full">{profileData.fullName}</h3>
+              <p className="text-xs text-content-muted mb-4 truncate w-full text-center">{profileData.email}</p>
               
               <div className="w-full space-y-3">
-                <div className="flex items-center gap-3 text-sm text-content-secondary bg-surface/50 p-2.5 rounded-lg border border-border-default">
-                  <User className="w-4 h-4 text-blue-400" /> Vai trò: Owner
+                <div className="flex items-center gap-3 text-sm text-content-secondary bg-surface/50 p-2.5 rounded-lg border border-border-default capitalize">
+                  <User className="w-4 h-4 text-blue-400" /> Trạng thái: {profileData.accountStatus.toLowerCase()}
                 </div>
                 <div className="flex items-center gap-3 text-sm text-content-secondary bg-surface/50 p-2.5 rounded-lg border border-border-default">
-                  <Clock className="w-4 h-4 text-emerald-400" /> Hoạt động: Tháng 6, 2026
+                  <Clock className="w-4 h-4 text-emerald-400" /> Loại: {profileData.isSystemAccount ? "Hệ thống" : "Người dùng"}
                 </div>
               </div>
             </div>
@@ -124,7 +149,7 @@ export default function Profile() {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs text-content-muted mb-2">Vị trí</label>
+                    <label className="block text-xs text-content-muted mb-2">Vị trí / Quốc gia</label>
                     <div className="relative">
                       <MapPin className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" />
                       <input 

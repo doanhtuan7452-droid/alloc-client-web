@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useSearchParams, useOutletContext } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
+import { useUser } from "../../contexts/UserContext";
 import {
   Search,
   Plus,
   Hash,
-  MoreVertical,
   Paperclip,
   Send,
   Smile,
@@ -13,540 +13,270 @@ import {
   Trash2,
   Wifi,
   WifiOff,
-  RefreshCw,
   X,
-  Check,
-  ChevronDown,
-  ChevronUp,
   FileText,
   Image,
   Bell,
-  Clock,
   Sparkles,
-  Info
 } from "lucide-react";
 import {
   fetchWorkspaceConversations,
-  fetchConversationDetails,
   fetchConversationMessages,
   sendConversationMessage,
   markConversationAsRead,
   editConversationMessage,
   deleteConversationMessage,
   createConversation,
-  fetchWorkspaceMembers
+  fetchWorkspaceMembers,
 } from "../../services/conversationApi";
-import { fetchWorkspaces } from "../../services/mockApi";
 
 export default function Conversations() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const isCreatingParam = searchParams.get("isCreating");
   const workspaceIdParam = searchParams.get("workspaceId");
 
+  const { currentUser, loading } = useUser();
+
+  // 1. ĐƯA TẤT CẢ STATE LÊN TRÊN CÙNG ĐỂ TRÁNH LỖI HOISTING/HOOKS
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(null);
   const [conversationsList, setConversationsList] = useState([]);
   const [activeConversation, setActiveConversation] = useState(null);
   const [messagesList, setMessagesList] = useState([]);
   const [workspaceMembersList, setWorkspaceMembersList] = useState([]);
-  const [workspacesList, setWorkspacesList] = useState([]);
-  
+
   // UI States
   const [inputText, setInputText] = useState("");
-  const [selectedAssets, setSelectedAssets] = useState([]); // Mock selected attachments
-  const [isLoading, setIsLoading] = useState(true);
-  const [isHistoryLoading, setHistoryLoading] = useState(false);
+  const [selectedAssets, setSelectedAssets] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [convSearchQuery, setConvSearchQuery] = useState("");
-  
-  // Message edit state
-  const [editingMessageId, setEditingMessageId] = useState(null);
-  const [editingText, setEditingText] = useState("");
-  
-  // Modal State
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [activeTab, setActiveTab] = useState("all");
+
+  // Modal Tạo Chat States
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [newChatType, setNewChatType] = useState("Group"); // Group, Direct, Project_Channel
+  const [newChatType, setNewChatType] = useState("Group"); 
   const [newChatName, setNewChatName] = useState("");
-  const [selectedMembers, setSelectedMembers] = useState([]);
-  
-  // Scroll & UI refs
-  const scrollContainerRef = useRef(null);
-  const isFetchingHistory = useRef(false);
-  const [showNewMessageBanner, setShowNewMessageBanner] = useState(false);
-  
-  // Real-time Hub Simulation States
-  const [connectionStatus, setConnectionStatus] = useState("Connected"); // Connected, Reconnecting, Disconnected
-  const [isDevConsoleOpen, setIsDevConsoleOpen] = useState(false);
-  const [notificationToast, setNotificationToast] = useState(null);
-  const [eventLogs, setEventLogs] = useState([]);
+  const [selectedMembers, setSelectedMembers] = useState([]); 
 
-  // Resolve Active Workspace ID
-  useEffect(() => {
-    async function resolveWorkspace() {
-      try {
-        const list = await fetchWorkspaces();
-        setWorkspacesList(list);
-        
-        if (workspaceIdParam) {
-          setActiveWorkspaceId(parseInt(workspaceIdParam));
-          localStorage.setItem("lastActiveWorkspaceId", workspaceIdParam);
-        } else {
-          const storedId = localStorage.getItem("lastActiveWorkspaceId");
-          if (storedId) {
-            setActiveWorkspaceId(parseInt(storedId));
-            setSearchParams({ workspaceId: storedId }, { replace: true });
-          } else if (list.length > 0) {
-            const firstId = list[0].workspaceId.toString();
-            setActiveWorkspaceId(parseInt(firstId));
-            localStorage.setItem("lastActiveWorkspaceId", firstId);
-            setSearchParams({ workspaceId: firstId }, { replace: true });
-          }
-        }
-      } catch (err) {
-        console.error("Error loading workspaces:", err);
-      }
-    }
-    resolveWorkspace();
-  }, [workspaceIdParam, setSearchParams]);
+  // Message Actions States
+  const [editingMessageId, setEditingMessageId] = useState(null);
+  const [editText, setEditText] = useState("");
 
-  // Load Conversations and Members for the Active Workspace
-  useEffect(() => {
-    if (!activeWorkspaceId) return;
+  const messagesEndRef = useRef(null);
 
-    let isSubscribed = true;
-    async function loadConversations() {
-      setIsLoading(true);
-      try {
-        const conversationsData = await fetchWorkspaceConversations(activeWorkspaceId);
-        const membersData = await fetchWorkspaceMembers(activeWorkspaceId);
-        
-        if (isSubscribed) {
-          setConversationsList(conversationsData);
-          setWorkspaceMembersList(membersData);
-          
-          // Auto select first conversation if none is active
-          if (conversationsData.length > 0) {
-            handleSelectConversation(conversationsData[0]);
-          } else {
-            setActiveConversation(null);
-            setMessagesList([]);
-          }
-        }
-      } catch (err) {
-        console.error("Error loading conversation data:", err);
-      } finally {
-        if (isSubscribed) setIsLoading(false);
-      }
-    }
+  const myAccountId = currentUser?.accountId;
 
-    loadConversations();
-    return () => {
-      isSubscribed = false;
-    };
-  }, [activeWorkspaceId]);
+  const myMemberId = useMemo(() => {
+    if (!currentUser?.profile?.resourceId) return null;
 
-  // Handle Conversation Selection and Read Receipts
-  const handleSelectConversation = async (conversation) => {
-    setActiveConversation(conversation);
-    setMessagesList([]);
-    setEditingMessageId(null);
-    setShowNewMessageBanner(false);
-    
-    // Clear unread count locally (Optimistic UI)
-    setConversationsList(prev =>
-      prev.map(c =>
-        c.conversationId === conversation.conversationId
-          ? { ...c, unreadCount: 0 }
-          : c
-      )
+    const me = workspaceMembersList.find(
+      (m) =>
+        m.resource?.resourceId === currentUser.profile.resourceId
     );
 
-    // Call REST endpoint to mark as read in background
-    try {
-      await markConversationAsRead(conversation.conversationId);
-      logEvent(`REST: Mark read for conversation ${conversation.conversationId}`);
-    } catch (err) {
-      console.error("Error marking read:", err);
-    }
+    return me?.workspaceMemberId ?? null;
+  }, [currentUser, workspaceMembersList]);
 
-    // Load message history
-    try {
-      const msgs = await fetchConversationMessages(conversation.conversationId, 20);
-      setMessagesList(msgs);
-      
-      // Auto scroll to bottom
-      setTimeout(() => {
-        if (scrollContainerRef.current) {
-          scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-        }
-      }, 50);
-
-      // Simulate SignalR: JoinConversation invoke call
-      logEvent(`SignalR Hub: JoinConversation(${conversation.conversationId})`);
-    } catch (err) {
-      console.error("Error loading messages:", err);
-    }
-  };
-
-  // Scroll Anchoring & Pagination logic on Scroll
-  const handleScroll = async (e) => {
-    const container = e.target;
-    if (!container || !activeConversation || isHistoryLoading) return;
-
-    // Detect if we scrolled close to top (scrollTop <= 15px)
-    if (container.scrollTop <= 15) {
-      if (isFetchingHistory.current || messagesList.length === 0) return;
-      
-      const oldestMsg = messagesList[0];
-      // Check if there are historical messages to fetch
-      if (oldestMsg && oldestMsg.messageId && oldestMsg.messageId > 1) {
-        isFetchingHistory.current = true;
-        setHistoryLoading(true);
-        logEvent(`REST API: Fetching history before messageId ${oldestMsg.messageId}`);
-        
-        try {
-          const prevScrollHeight = container.scrollHeight;
-          const prevScrollTop = container.scrollTop;
-          
-          // Fetch older messages (older messages are returned chronologically)
-          const olderMessages = await fetchConversationMessages(
-            activeConversation.conversationId,
-            15,
-            oldestMsg.messageId
-          );
-          
-          if (olderMessages && olderMessages.length > 0) {
-            setMessagesList(prev => [...olderMessages, ...prev]);
-            
-            // Adjust scroll position after render (Scroll Anchoring)
-            setTimeout(() => {
-              container.scrollTop = prevScrollTop + (container.scrollHeight - prevScrollHeight);
-            }, 0);
-          }
-        } catch (err) {
-          console.error("Error fetching history:", err);
-        } finally {
-          isFetchingHistory.current = false;
-          setHistoryLoading(false);
-        }
-      }
-    }
-  };
-
-  // Auto scroll to bottom when receiving new message
+  // 3. THEO DÕI TRẠNG THÁI MẠNG (ĐẢM BẢO CÓ DẤU ; RÕ RÀNG)
   useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container || messagesList.length === 0) return;
-
-    const lastMsg = messagesList[messagesList.length - 1];
-    const isCurrentUserSender = lastMsg && lastMsg.senderId === 99;
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
     
-    // Check if the user is currently looking at history (not near bottom)
-    const isNearBottom = (container.scrollHeight - container.clientHeight - container.scrollTop) < 150;
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
 
-    if (isCurrentUserSender || isNearBottom) {
-      container.scrollTop = container.scrollHeight;
-      setShowNewMessageBanner(false);
+  // Đồng bộ Workspace ID từ URL và tải danh sách cuộc trò chuyện, thành viên
+  useEffect(() => {
+    if (!workspaceIdParam) return;
+
+    const wId = parseInt(workspaceIdParam);
+    setActiveWorkspaceId(wId);
+
+    if (isCreatingParam === "true") {
+      setIsCreateModalOpen(true);
     } else {
-      setShowNewMessageBanner(true);
+      setIsCreateModalOpen(false);
     }
+
+    const loadData = async () => {
+      try {
+        const res = await fetchWorkspaceConversations(wId);
+        const list = res?.data || res || []; 
+        setConversationsList(list);
+
+        if (isCreatingParam !== "true" && list.length > 0) {
+          setActiveConversation(list[0]);
+        }
+      } catch (err) {
+        console.error("Lỗi khi tải danh sách cuộc hội thoại:", err);
+        setConversationsList([]);
+      }
+
+      try {
+        const members = await fetchWorkspaceMembers(wId);
+        setWorkspaceMembersList(members || []);
+      } catch (err) {
+        console.error("Lỗi khi tải thành viên workspace:", err);
+        setWorkspaceMembersList([]);
+      }
+    };
+
+    loadData();
+  }, [workspaceIdParam, isCreatingParam]);
+
+  // Tải lịch sử tin nhắn khi chọn phòng hội thoại
+  useEffect(() => {
+    if (activeConversation?.conversationId) {
+      fetchConversationMessages(activeConversation.conversationId)
+        .then((res) => {
+          const msgs = res.data?.items || res.data || res || [];
+          setMessagesList(msgs.reverse());
+          return markConversationAsRead(activeConversation.conversationId);
+        })
+        .then(() => {
+          setConversationsList((prev) =>
+            prev.map((c) =>
+              c.conversationId === activeConversation.conversationId ? { ...c, unreadCount: 0 } : c
+            )
+          );
+        })
+        .catch((err) => console.error("Lỗi nạp tin nhắn:", err));
+    } else {
+      setMessagesList([]);
+    }
+  }, [activeConversation]);
+
+  // Reset selected members khi đổi loại chat trong modal
+  useEffect(() => {
+    setSelectedMembers([]);
+  }, [newChatType]);
+
+  // Tự động cuộn xuống khi có tin nhắn mới
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messagesList]);
 
-  // Send message with Optimistic UI & Stable Keys
+  // Bộ lọc danh sách hội thoại theo Tab và Ô tìm kiếm
+  const filteredConversations = useMemo(() => {
+    return conversationsList.filter((c) => {
+      const matchesSearch = (c.name || `Hội thoại ${c.conversationId}`)
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
+      if (!matchesSearch) return false;
+
+      if (activeTab === "direct") return c.type === "Direct";
+      if (activeTab === "groups") return c.type === "Group";
+      if (activeTab === "channels") return c.type === "Project_Channel";
+      return true;
+    });
+  }, [conversationsList, searchQuery, activeTab]);
+
+  const handleSelectConversation = (conv) => {
+    setActiveConversation(conv);
+    setEditingMessageId(null);
+  };
+
+  // Click mở Modal và cập nhật lại thành viên mới nhất
+  const handleOpenCreateModal = () => {
+    setIsCreateModalOpen(true);
+    setSelectedMembers([]);
+    if (activeWorkspaceId) {
+      fetchWorkspaceMembers(activeWorkspaceId)
+        .then((res) => {
+          const members = res.data || res?.items || res || [];
+          setWorkspaceMembersList(members);
+        })
+        .catch((err) => console.error(err));
+    }
+  };
+
+  // Quản lý tích chọn thành viên trong Form Modal tạo chat
+  const toggleMemberSelection = (memberId) => {
+    const idNum = Number(memberId);
+    setSelectedMembers((prev) => {
+      if (newChatType === "Direct") {
+        return [idNum]; // Nếu là chat 1-1, chỉ cho phép chọn duy nhất 1 người
+      }
+      return prev.includes(idNum) ? prev.filter((id) => id !== idNum) : [...prev, idNum];
+    });
+  };
+
+  // Thêm tệp đính kèm tạm thời
+  const handleFileChange = (e) => {
+    const files = Array.from(e.target.files);
+    const mockAssets = files.map((f, i) => ({
+      assetId: Date.now() + i,
+      fileName: f.name,
+      fileType: f.type.startsWith("image/") ? "Image" : "Document",
+    }));
+    setSelectedAssets((prev) => [...prev, ...mockAssets]);
+  };
+
+  // Gửi tin nhắn mới lên API
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if ((!inputText.trim() && selectedAssets.length === 0) || !activeConversation) return;
+    if (!inputText.trim() && selectedAssets.length === 0) return;
+    if (!activeConversation) return;
 
-    const textToSend = inputText.trim();
-    const assetsToSend = [...selectedAssets];
+    const contentToSend = inputText;
+    const assetsToSend = selectedAssets.map((a) => a.assetId);
+
     setInputText("");
     setSelectedAssets([]);
 
-    // Generate optimistic tempId and message details
-    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    const optimisticMsg = {
-      messageId: null,
-      tempId: tempId,
-      conversationId: activeConversation.conversationId,
-      senderId: 99,
-      senderName: "Nguyễn Văn A",
-      senderAvatarUrl: null,
-      content: textToSend,
-      createdAt: new Date().toISOString(),
-      isEdited: false,
-      isDeleted: false,
-      isOptimistic: true,
-      assets: assetsToSend.length > 0 ? assetsToSend.map((id) => ({
-        assetId: id,
-        assetName: id === 201 ? "regression_results.png" : "design_spec.png",
-        assetType: id === 201 ? "image/png" : "application/pdf",
-        fileSizeKB: 512,
-        createdAt: new Date().toISOString()
-      })) : null
-    };
-
-    // Prepend optimistic message to UI list immediately
-    setMessagesList(prev => [...prev, optimisticMsg]);
-
     try {
-      const realMsg = await sendConversationMessage(
+      const res = await sendConversationMessage(
         activeConversation.conversationId,
-        textToSend,
+        contentToSend,
         assetsToSend
       );
-
-      // Swap temp placeholder with the database payload
-      setMessagesList(prev => prev.map(m => (m.tempId === tempId ? realMsg : m)));
-      
-      // Update last message in active listing
-      setConversationsList(prev => prev.map(c => 
-        c.conversationId === activeConversation.conversationId 
-          ? { 
-              ...c, 
-              lastMessageContent: realMsg.content || (realMsg.assets ? "[Tài liệu đính kèm]" : ""), 
-              lastMessageAt: realMsg.createdAt 
-            } 
-          : c
-      ));
-      
-      logEvent(`REST: Message created (ID: ${realMsg.messageId})`);
+      const savedMsg = res.data || res;
+      setMessagesList((prev) => [...prev, savedMsg]);
     } catch (err) {
-      console.error("Failed to send message:", err);
-      // Rollback optimistic message if call fails
-      setMessagesList(prev => prev.filter(m => m.tempId !== tempId));
+      console.error("Lỗi gửi tin nhắn:", err);
     }
   };
 
-  // Edit message
-  const handleStartEdit = (msg) => {
+  const startEditMessage = (msg) => {
     setEditingMessageId(msg.messageId);
-    setEditingText(msg.content);
+    setEditText(msg.content);
   };
 
-  const handleSaveEdit = async (msgId) => {
-    if (!editingText.trim()) return;
+  // Lưu chỉnh sửa tin nhắn
+  const handleSaveEditMessage = async (msgId) => {
+    if (!editText.trim()) return;
     try {
-      const updatedMsg = await editConversationMessage(msgId, editingText.trim());
-      setMessagesList(prev => prev.map(m => m.messageId === msgId ? updatedMsg : m));
-      
-      // Update conversations list text if editing latest message
-      if (activeConversation && messagesList[messagesList.length - 1]?.messageId === msgId) {
-        setConversationsList(prev => prev.map(c => 
-          c.conversationId === activeConversation.conversationId
-            ? { ...c, lastMessageContent: updatedMsg.content }
-            : c
-        ));
-      }
+      await editConversationMessage(msgId, editText.trim());
+      setMessagesList((prev) =>
+        prev.map((m) =>
+          m.messageId === msgId ? { ...m, content: editText.trim(), isEdited: true } : m
+        )
+      );
       setEditingMessageId(null);
-      logEvent(`REST: Message edited (ID: ${msgId})`);
     } catch (err) {
-      console.error("Error editing message:", err);
+      console.error(err);
+      alert("Lỗi khi chỉnh sửa tin nhắn.");
     }
   };
 
-  // Soft Delete (Recall) Message
-  const handleRecallMessage = async (msgId) => {
-    if (!window.confirm("Bạn có muốn thu hồi tin nhắn này không?")) return;
+  // Thu hồi tin nhắn
+  const handleDeleteMessage = async (msgId) => {
+    if (!window.confirm("Bạn có chắc chắn muốn thu hồi tin nhắn này không?")) return;
     try {
       await deleteConversationMessage(msgId);
-      
-      // Update local state to reflect soft delete
-      setMessagesList(prev => prev.map(m => 
-        m.messageId === msgId 
-          ? { ...m, content: "[Tin nhắn đã thu hồi]", isDeleted: true, assets: null }
-          : m
-      ));
-      
-      if (activeConversation && messagesList[messagesList.length - 1]?.messageId === msgId) {
-        setConversationsList(prev => prev.map(c => 
-          c.conversationId === activeConversation.conversationId
-            ? { ...c, lastMessageContent: "[Tin nhắn đã thu hồi]" }
-            : c
-        ));
-      }
-      
-      logEvent(`REST: Message recalled (ID: ${msgId})`);
+      setMessagesList((prev) => prev.filter((m) => m.messageId !== msgId));
     } catch (err) {
-      console.error("Error recalling message:", err);
+      console.error(err);
+      alert("Lỗi khi thu hồi tin nhắn.");
     }
   };
 
-  // Helper log event for simulator
-  const logEvent = (desc) => {
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    setEventLogs(prev => [`[${time}] ${desc}`, ...prev.slice(0, 19)]);
-  };
-
-  // --- Real-time SignalR Event Simulator actions ---
-  const simulateIncomingMessage = () => {
-    if (!activeConversation) return;
-    
-    // Check connection state
-    if (connectionStatus !== "Connected") {
-      logEvent("SignalR Warning: Cannot receive event, hub is disconnected!");
-      return;
-    }
-
-    const randomMember = workspaceMembersList.find(m => m.workspaceMemberId !== 99) 
-      || { workspaceMemberId: 102, fullName: "Dr. Alyx Vance", avatarUrl: "https://i.pravatar.cc/150?u=2" };
-
-    const randomMessages = [
-      "Tôi vừa cập nhật lại file kế hoạch, mọi người xem qua nhé.",
-      "Chỉ số latency của server đang hơi cao, tôi sẽ kiểm tra lại.",
-      "Mọi người đã chuẩn bị xong file thuyết trình chưa?",
-      "Tiến trình chạy neural net đã hoàn tất 90%.",
-      "Tôi sẽ sửa lại phần CSS Layout cho đồng nhất."
-    ];
-    const text = randomMessages[Math.floor(Math.random() * randomMessages.length)];
-    const timeStr = new Date().toISOString();
-    
-    // Simulate real-time message payloads
-    const allMsgs = messagesList.filter(m => m.messageId !== null);
-    const newMsgId = allMsgs.length > 0 ? Math.max(...allMsgs.map(m => m.messageId)) + 1 : 1000;
-
-    const pushPayload = {
-      messageId: newMsgId,
-      conversationId: activeConversation.conversationId,
-      senderId: randomMember.workspaceMemberId,
-      senderName: randomMember.fullName,
-      senderAvatarUrl: randomMember.avatarUrl,
-      content: text,
-      createdAt: timeStr,
-      isEdited: false,
-      isDeleted: false,
-      assets: Math.random() > 0.7 ? [{
-        assetId: 500 + newMsgId,
-        assetName: "regression_summary.png",
-        assetType: "image/png",
-        fileSizeKB: 256,
-        createdAt: timeStr
-      }] : null
-    };
-
-    // Push into message state using Functional Updates (Mitigate Closure Trap)
-    setMessagesList(prev => [...prev, pushPayload]);
-    
-    // Update conversations list text
-    setConversationsList(prev => prev.map(c => 
-      c.conversationId === activeConversation.conversationId 
-        ? { ...c, lastMessageContent: text, lastMessageAt: timeStr } 
-        : c
-    ));
-
-    logEvent(`SignalR Push Event 'MessageCreated' received (Msg ID: ${newMsgId})`);
-  };
-
-  const simulateTeammateEdit = () => {
-    if (!activeConversation || messagesList.length === 0) return;
-    if (connectionStatus !== "Connected") {
-      logEvent("SignalR Warning: Cannot receive event, hub is disconnected!");
-      return;
-    }
-
-    // Find the latest message sent by another person that is not deleted
-    const teammateMsgs = messagesList.filter(m => m.senderId !== 99 && !m.isDeleted && m.messageId);
-    if (teammateMsgs.length === 0) {
-      logEvent("SignalR Error: No teammate messages available to edit.");
-      return;
-    }
-
-    const targetMsg = teammateMsgs[teammateMsgs.length - 1];
-    const editPayload = {
-      ...targetMsg,
-      content: targetMsg.content + " (Nội dung đã chỉnh sửa qua WebSocket SignalR)",
-      isEdited: true
-    };
-
-    // Functional Update to prevent closure trap
-    setMessagesList(prev => prev.map(m => m.messageId === targetMsg.messageId ? editPayload : m));
-    
-    logEvent(`SignalR Push Event 'MessageEdited' received (Msg ID: ${targetMsg.messageId})`);
-  };
-
-  const simulateTeammateRecall = () => {
-    if (!activeConversation || messagesList.length === 0) return;
-    if (connectionStatus !== "Connected") {
-      logEvent("SignalR Warning: Cannot receive event, hub is disconnected!");
-      return;
-    }
-
-    // Find latest message sent by another person that is not deleted
-    const teammateMsgs = messagesList.filter(m => m.senderId !== 99 && !m.isDeleted && m.messageId);
-    if (teammateMsgs.length === 0) {
-      logEvent("SignalR Error: No teammate messages available to recall.");
-      return;
-    }
-
-    const targetMsg = teammateMsgs[teammateMsgs.length - 1];
-    
-    // Functional Update
-    setMessagesList(prev => prev.map(m => 
-      m.messageId === targetMsg.messageId 
-        ? { ...m, content: "[Tin nhắn đã thu hồi]", isDeleted: true, assets: null }
-        : m
-    ));
-    
-    logEvent(`SignalR Push Event 'MessageDeleted' received (Msg ID: ${targetMsg.messageId})`);
-  };
-
-  const simulateNotification = () => {
-    if (connectionStatus !== "Connected") {
-      logEvent("SignalR Warning: Cannot receive event, hub is disconnected!");
-      return;
-    }
-
-    const notifPayload = {
-      notificationID: Math.floor(Math.random() * 1000) + 8000,
-      notificationType: "TaskAssigned",
-      title: "Công việc mới được giao",
-      message: `Bạn vừa được giao công việc '${["Thiết kế Dashboard", "Tối ưu hóa Database", "Tích hợp SignalR Hub", "Lên tài liệu API"][Math.floor(Math.random() * 4)]}'`,
-      referenceType: "Task",
-      referenceID: 1000 + Math.floor(Math.random() * 50),
-      isRead: false,
-      readAt: null,
-      createdAt: new Date().toISOString(),
-      metadataJson: "{\"projectId\":3}"
-    };
-
-    setNotificationToast(notifPayload);
-    logEvent(`SignalR Hub: Pushed 'ReceiveNotification' for current member`);
-    
-    // Auto clear toast after 6 seconds
-    setTimeout(() => {
-      setNotificationToast(prev => prev?.notificationID === notifPayload.notificationID ? null : prev);
-    }, 6000);
-  };
-
-  const simulateConversationCleared = () => {
-    if (!activeConversation) return;
-    if (connectionStatus !== "Connected") {
-      logEvent("SignalR Warning: Cannot receive event, hub is disconnected!");
-      return;
-    }
-
-    // Soft delete conversation list state
-    setConversationsList(prev => prev.filter(c => c.conversationId !== activeConversation.conversationId));
-    setActiveConversation(null);
-    setMessagesList([]);
-
-    logEvent(`SignalR Push Event 'ConversationCleared' received. Room closed.`);
-    alert("Cuộc hội thoại này đã bị giải tán/xóa bởi quản trị viên (simulated).");
-  };
-
-  // --- Create Conversation Flow ---
-  const handleOpenCreateModal = () => {
-    setNewChatName("");
-    setNewChatType("Group");
-    setSelectedMembers([99]); // Add current user by default
-    setIsCreateModalOpen(true);
-  };
-
-  const toggleMemberSelection = (memberId) => {
-    setSelectedMembers(prev => 
-      prev.includes(memberId)
-        ? prev.filter(id => id !== memberId)
-        : [...prev, memberId]
-    );
-  };
-
+  // Xử lý tạo cuộc hội thoại mới khi Submit form Modal
   const handleCreateChat = async (e) => {
     e.preventDefault();
     if (!activeWorkspaceId) return;
@@ -555,847 +285,472 @@ export default function Conversations() {
       alert("Vui lòng nhập tên cuộc hội thoại!");
       return;
     }
+    if (newChatType === "Direct" && selectedMembers.length !== 1) {
+      alert("Hội thoại Direct (1-1) yêu cầu chọn đúng 1 đồng nghiệp!");
+      return;
+    }
 
-    if (newChatType === "Direct" && selectedMembers.length !== 2) {
-      alert("Hội thoại 1-1 phải có đúng 2 thành viên (Bạn và 1 người khác)!");
-      return;
-    }
-    
-    if (newChatType === "Group" && selectedMembers.length < 2) {
-      alert("Hội thoại nhóm cần ít nhất 2 thành viên!");
-      return;
-    }
+    // Khi gửi lên backend, gom cả ID của mình và các thành viên được chọn vào mảng chung nếu backend yêu cầu đầy đủ
+    const finalMemberIds = myMemberId ? [myMemberId, ...selectedMembers] : selectedMembers;
 
     try {
-      let resolvedName = newChatName.trim();
-      if (newChatType === "Direct") {
-        // Find the other member to name the chat
-        const otherId = selectedMembers.find(id => id !== 99);
-        const otherMember = workspaceMembersList.find(m => m.workspaceMemberId === otherId);
-        resolvedName = otherMember ? otherMember.fullName : "Trò chuyện trực tiếp";
-      }
+      const response = await createConversation({
+        workspaceId: activeWorkspaceId,
+        type: newChatType,
+        name: newChatType === "Direct" ? "" : newChatName.trim(),
+        workspaceMemberIds: newChatType === "Direct" ? selectedMembers : finalMemberIds, // Điều chỉnh tùy theo cấu trúc API nhận diện 1-1 của bạn
+        projectId: null
+      });
 
-      const newConv = await createConversation(activeWorkspaceId, newChatType, resolvedName, selectedMembers);
-      
-      setConversationsList(prev => [newConv, ...prev]);
-      setActiveConversation(newConv);
-      setMessagesList([
-        {
-          messageId: 10001,
-          conversationId: newConv.conversationId,
-          senderId: 99,
-          senderName: "Nguyễn Văn A",
-          senderAvatarUrl: null,
-          content: "Cuộc hội thoại mới được khởi tạo.",
-          createdAt: new Date().toISOString(),
-          isEdited: false,
-          isDeleted: false,
-          assets: null
-        }
-      ]);
-      
+      const newConv = response.data || response;
+      setConversationsList((prev) => [newConv, ...prev]);
+      handleSelectConversation(newConv);
+
       setIsCreateModalOpen(false);
-      logEvent(`REST: Created new ${newChatType} conversation (ID: ${newConv.conversationId})`);
+      setNewChatName("");
+      setSelectedMembers([]);
     } catch (err) {
-      console.error("Error creating chat:", err);
+      console.error(err);
+      alert(err?.response?.data?.message || "Lỗi khi tạo cuộc hội thoại.");
     }
   };
 
-  // Memoized message items processing: Grouping, Avatars and Time Dividers
-  const groupedItems = useMemo(() => {
-    if (!messagesList || messagesList.length === 0) return [];
-    
-    const items = [];
-    let lastMsg = null;
-    
-    messagesList.forEach((msg) => {
-      // 1. Time / Date Divider check
-      let showDivider = false;
-      let dividerText = "";
-      
-      const currentMsgDate = new Date(msg.createdAt);
-      
-      if (!lastMsg) {
-        showDivider = true;
-      } else {
-        const lastMsgDate = new Date(lastMsg.createdAt);
-        const timeDiff = currentMsgDate.getTime() - lastMsgDate.getTime();
-        
-        // Different day OR time gap > 1 hour
-        const isDifferentDay = currentMsgDate.toDateString() !== lastMsgDate.toDateString();
-        const isOverHour = timeDiff > 3600000;
-        
-        if (isDifferentDay || isOverHour) {
-          showDivider = true;
-        }
-      }
-      
-      if (showDivider) {
-        const dateObj = new Date(msg.createdAt);
-        const todayStr = new Date().toDateString();
-        const yesterdayStr = new Date(Date.now() - 86400000).toDateString();
-        
-        let timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        if (dateObj.toDateString() === todayStr) {
-          dividerText = `Hôm nay, ${timeStr}`;
-        } else if (dateObj.toDateString() === yesterdayStr) {
-          dividerText = `Hôm qua, ${timeStr}`;
-        } else {
-          const dateStr = dateObj.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
-          dividerText = `${dateStr}, ${timeStr}`;
-        }
-        
-        items.push({
-          type: "divider",
-          key: `div-${msg.messageId || msg.tempId}`,
-          text: dividerText
-        });
-      }
-      
-      // 2. Avatar/Name Grouping Collapse
-      let isFirstInGroup = true;
-      if (lastMsg && !showDivider) {
-        const lastMsgDate = new Date(lastMsg.createdAt);
-        const timeDiff = currentMsgDate.getTime() - lastMsgDate.getTime();
-        
-        // Same sender AND within 2 minutes AND both are not recalled
-        const isSameSender = msg.senderId === lastMsg.senderId;
-        const isWithinTwoMinutes = timeDiff < 120000;
-        
-        if (isSameSender && isWithinTwoMinutes && !msg.isDeleted && !lastMsg.isDeleted) {
-          isFirstInGroup = false;
-        }
-      }
-      
-      items.push({
-        type: "message",
-        key: msg.messageId || msg.tempId,
-        isFirstInGroup,
-        message: msg
-      });
-      
-      lastMsg = msg;
-    });
-    
-    return items;
-  }, [messagesList]);
-
-  // Filter conversations List based on local query
-  const filteredConversations = conversationsList.filter(c =>
-    c.name.toLowerCase().includes(convSearchQuery.toLowerCase())
-  );
-
-  const channels = filteredConversations.filter(c => c.type === "Project_Channel" || c.type === "Group");
-  const directMessages = filteredConversations.filter(c => c.type === "Direct");
-
   return (
-    <div className="flex-1 h-full flex flex-row overflow-hidden relative text-slate-200">
+    <div className="flex h-[calc(100vh-4rem)] w-full bg-[#0B0B0C] text-slate-100 overflow-hidden select-none">
       
-      {/* 1. Left Column - Conversation List (Elevated layout bg-white/[0.02] matching theme) */}
-      <div className="w-80 border-r border-white/10 flex flex-col bg-white/[0.02] shrink-0">
+      {/* SIDEBAR TRÁI: DANH SÁCH PHÒNG CHAT */}
+      <div className="w-80 border-r border-white/5 flex flex-col bg-white/10 border border-white/10 shrink-0">
         
-        {/* Header Search Area */}
-        <div className="p-4 border-b border-white/10 bg-black/10">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-white tracking-wide">Trò chuyện</h2>
-            <button 
+        {/* Header tìm kiếm & Plus button */}
+        <div className="p-4 border-b border-white/5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h1 className="text-base font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-400 bg-clip-text text-transparent flex items-center gap-2">
+              <Sparkles size={16} className="text-blue-400 animate-pulse" />
+              Conversations
+            </h1>
+            <button
               onClick={handleOpenCreateModal}
-              className="w-7 h-7 rounded-md bg-white/[0.05] border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+              className="p-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-slate-400 hover:text-white transition-all cursor-pointer"
+              title="Tạo cuộc hội thoại mới"
             >
-              <Plus className="w-4 h-4" />
+              <Plus size={16} />
             </button>
           </div>
+
           <div className="relative">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
             <input
               type="text"
-              placeholder="Tìm hội thoại..."
-              value={convSearchQuery}
-              onChange={(e) => setConvSearchQuery(e.target.value)}
-              className="w-full bg-white/[0.03] border border-white/10 rounded-md pl-8 pr-4 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500/50"
+              placeholder="Tìm kiếm phòng, tin nhắn..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-[#141416] border border-white/5 rounded-lg pl-9 pr-4 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 font-mono"
             />
           </div>
         </div>
 
-        {/* Categories List */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-4">
-          
-          {/* Channels Section */}
-          <div>
-            <h3 className="px-3 text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">
-              Kênh thảo luận
-            </h3>
-            <div className="space-y-0.5">
-              {isLoading ? (
-                <div className="text-xs text-slate-500 p-3">Đang tải...</div>
-              ) : channels.length === 0 ? (
-                <div className="text-[11px] text-slate-600 px-3 py-2">Không có kênh nào</div>
-              ) : (
-                channels.map((chan) => {
-                  const isActive = activeConversation?.conversationId === chan.conversationId;
-                  return (
-                    <button
-                      key={chan.conversationId}
-                      onClick={() => handleSelectConversation(chan)}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-md transition text-left cursor-pointer ${
-                        isActive
-                          ? "bg-white/[0.08] text-white border-l-2 border-blue-500 font-medium"
-                          : "text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 overflow-hidden mr-2">
-                        <Hash className="w-4 h-4 text-slate-500 shrink-0" />
-                        <span className="text-xs truncate">{chan.name}</span>
-                      </div>
-                      {chan.unreadCount > 0 && (
-                        <span className="bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">
-                          {chan.unreadCount}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          {/* Direct Messages Section */}
-          <div>
-            <h3 className="px-3 text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">
-              Tin nhắn trực tiếp
-            </h3>
-            <div className="space-y-0.5">
-              {isLoading ? (
-                null
-              ) : directMessages.length === 0 ? (
-                <div className="text-[11px] text-slate-600 px-3 py-2">Không có tin nhắn trực tiếp</div>
-              ) : (
-                directMessages.map((dm) => {
-                  const isActive = activeConversation?.conversationId === dm.conversationId;
-                  // Resolve member status or avatar for visual styling
-                  const fallbackInitials = dm.name.slice(0, 2).toUpperCase();
-                  
-                  return (
-                    <button
-                      key={dm.conversationId}
-                      onClick={() => handleSelectConversation(dm)}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md transition text-left cursor-pointer ${
-                        isActive
-                          ? "bg-white/[0.08] text-white border-l-2 border-blue-500 font-medium"
-                          : "text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]"
-                      }`}
-                    >
-                      <div className="relative shrink-0">
-                        <div className="w-7 h-7 rounded-full bg-white/[0.05] border border-white/10 flex items-center justify-center text-[10px] font-bold text-slate-300 overflow-hidden">
-                          {fallbackInitials}
-                        </div>
-                        <span className="absolute bottom-0 right-0 w-2 h-2 bg-emerald-500 border border-black rounded-full"></span>
-                      </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-center mb-0.5">
-                          <span className="text-xs font-medium text-slate-200 truncate">{dm.name}</span>
-                          {dm.lastMessageAt && (
-                            <span className="text-[9px] text-slate-500 font-mono">
-                              {new Date(dm.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-slate-500 truncate">{dm.lastMessageContent}</p>
-                      </div>
-                      {dm.unreadCount > 0 && (
-                        <span className="bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">
-                          {dm.unreadCount}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
+        {/* Các Tab Phân loại phòng */}
+        <div className="flex border-b border-white/5 px-2 bg-black/10 shrink-0 text-[11px] font-mono">
+          {["all", "direct", "groups", "channels"].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 py-2 text-center border-b font-medium capitalize transition-all cursor-pointer ${
+                activeTab === tab
+                  ? "border-blue-500 text-blue-400 bg-white/[0.01]"
+                  : "border-transparent text-slate-500 hover:text-slate-300"
+              }`}
+            >
+              {tab === "all" ? "Tất cả" : tab === "direct" ? "1-1" : tab === "groups" ? "Nhóm" : "Kênh"}
+            </button>
+          ))}
         </div>
 
-        {/* SignalR Connection Panel Status */}
-        <div className="p-3 border-t border-white/10 bg-black/10 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2 text-slate-400">
-            {connectionStatus === "Connected" ? (
-              <>
-                <Wifi className="w-3.5 h-3.5 text-emerald-400" />
-                <span>SignalR Hub Connected</span>
-              </>
-            ) : connectionStatus === "Reconnecting" ? (
-              <>
-                <RefreshCw className="w-3.5 h-3.5 text-amber-500 animate-spin" />
-                <span className="text-amber-500">Reconnecting...</span>
-              </>
-            ) : (
-              <>
-                <WifiOff className="w-3.5 h-3.5 text-rose-500" />
-                <span className="text-rose-500">Disconnected</span>
-              </>
-            )}
-          </div>
-          <button 
-            onClick={() => setConnectionStatus(prev => prev === "Connected" ? "Disconnected" : "Connected")}
-            className="text-[10px] px-2 py-1 rounded bg-white/[0.05] border border-white/10 hover:bg-white/10 text-slate-300 font-mono cursor-pointer"
-          >
-            {connectionStatus === "Connected" ? "Mất mạng" : "Kết nối"}
-          </button>
-        </div>
-
-      </div>
-
-      {/* 2. Right Column - Chat Space (Main content) */}
-      <div className="flex-1 flex flex-col bg-white/[0.01]">
-        
-        {activeConversation ? (
-          <>
-            {/* Active Header (Muted dark slate panel) */}
-            <div className="h-14 border-b border-white/10 flex items-center justify-between px-6 bg-white/[0.02]">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-md bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
-                  {activeConversation.type === "Project_Channel" ? (
-                    <Hash className="w-4 h-4" />
-                  ) : (
-                    <UserCircle className="w-4 h-4" />
-                  )}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="font-bold text-sm text-white leading-none">{activeConversation.name}</h2>
-                    {activeConversation.type === "Project_Channel" && (
-                      <span className="bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[9px] px-1 rounded font-mono uppercase">
-                        Project Channel
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">
-                    {activeConversation.type === "Direct" ? "Trực tuyến" : `${workspaceMembersList.length} thành viên • Quản lý dự án`}
-                  </div>
-                </div>
-              </div>
-
-              {/* Developer Console Toggle */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setIsDevConsoleOpen(!isDevConsoleOpen)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-mono border transition cursor-pointer ${
-                    isDevConsoleOpen 
-                      ? "bg-purple-900/30 border-purple-500 text-purple-300"
-                      : "bg-white/[0.03] border-white/10 text-slate-400 hover:text-white"
+        {/* Khung chứa danh sách phòng chat */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+          {filteredConversations.length === 0 ? (
+            <div className="text-center py-8 text-xs text-slate-600 font-mono italic">
+              Không tìm thấy cuộc hội thoại nào.
+            </div>
+          ) : (
+            filteredConversations.map((conv) => {
+              const isSelected = activeConversation?.conversationId === conv.conversationId;
+              return (
+                <div
+                  key={conv.conversationId}
+                  onClick={() => handleSelectConversation(conv)}
+                  className={`group flex items-center justify-between p-3 rounded-xl cursor-pointer border transition-all ${
+                    isSelected
+                      ? "bg-blue-600/10 border-blue-500/30 text-white shadow-md"
+                      : "bg-transparent border-transparent text-slate-400 hover:bg-white/[0.02] hover:text-slate-200"
                   }`}
                 >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>SignalR Simulator Console</span>
-                </button>
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div
+                      className={`w-9 h-9 rounded-xl border flex items-center justify-center font-bold text-sm shrink-0 transition-all ${
+                        isSelected
+                          ? "bg-blue-500/20 border-blue-400/30 text-blue-400"
+                          : "bg-white/[0.02] border-white/5 text-slate-400 group-hover:border-white/10"
+                      }`}
+                    >
+                      {conv.type === "Project_Channel" ? (
+                        <Hash size={16} />
+                      ) : (
+                        (conv.name || "C").substring(0, 2).toUpperCase()
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2 mb-0.5">
+                        <span className="font-medium text-xs truncate text-slate-200">
+                          {conv.name || `Hội thoại Direct #${conv.conversationId}`}
+                        </span>
+                        <span className="text-[9px] font-mono text-content-muted shrink-0">
+                          {conv.type}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-content-muted truncate font-mono">
+                        {conv.lastMessageContent || "Chưa có tin nhắn thảo luận..."}
+                      </p>
+                    </div>
+                  </div>
+
+                  {conv.unreadCount > 0 && !isSelected && (
+                    <span className="ml-2 w-4 h-4 rounded-full bg-blue-500 text-[10px] font-bold font-mono flex items-center justify-center text-white shrink-0">
+                      {conv.unreadCount}
+                    </span>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Thanh trạng thái dưới đáy sidebar */}
+        <div className="p-3 border-t border-white/5 bg-black/20 flex items-center justify-between text-[10px] font-mono text-slate-500 shrink-0">
+          <div className="flex items-center gap-1.5">
+            {isOnline ? (
+              <span className="flex items-center gap-1 text-emerald-500 font-semibold">
+                <Wifi size={12} /> REST-READY
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-rose-500 font-semibold">
+                <WifiOff size={12} /> OFFLINE
+              </span>
+            )}
+          </div>
+          <span className="text-slate-600">WS-ID: {activeWorkspaceId || "None"}</span>
+        </div>
+      </div>
+
+      {/* CHÍNH GIỮA: KHUNG NỘI DUNG CUỘC TRÒ CHUYỆN */}
+      <div className="flex-1 flex flex-col bg-white/10 backdrop-blur-md border border-white/10 overflow-hidden relative">
+        {activeConversation ? (
+          <>
+            {/* Header Khung Chat Chi Tiết */}
+            <div className="h-14 border-b border-white/5 px-6 flex items-center justify-between bg-[#0E0E10]/50 shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-xs shrink-0">
+                  {activeConversation.type === "Project_Channel" ? (
+                    <Hash size={14} />
+                  ) : (
+                    (activeConversation.name || "C").substring(0, 2).toUpperCase()
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-xs font-bold text-slate-200 truncate">
+                    {activeConversation.name || `Hội thoại #${activeConversation.conversationId}`}
+                  </h2>
+                  <p className="text-[10px] text-slate-500 font-mono">
+                    Type: {activeConversation.type} • ID: {activeConversation.conversationId}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 text-xs font-mono text-slate-500">
+                <span className="flex items-center gap-1 text-slate-400">
+                  <Bell size={12} className="text-amber-500" /> Active
+                </span>
               </div>
             </div>
 
-            {/* Chat message listing (Stateful Scroll Container) */}
-            <div 
-              ref={scrollContainerRef}
-              onScroll={handleScroll}
-              className="flex-1 overflow-y-auto p-6 space-y-3 custom-scrollbar relative"
-            >
-              
-              {/* Pagination Spinner */}
-              {isHistoryLoading && (
-                <div className="flex items-center justify-center py-2 text-xs text-slate-500 gap-1.5 font-mono">
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Đang tải tin nhắn cũ...</span>
+            {/* Khung hiển thị danh sách tin nhắn */}
+            <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-4 bg-gradient-to-b from-black/0 via-black/5 to-black/20">
+              {messagesList.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-slate-600 space-y-2 font-mono">
+                  <p className="text-xs">Chưa có dữ liệu hội thoại nào ở phòng này.</p>
+                  <p className="text-[10px] text-slate-700">Hãy bắt đầu gửi tin nhắn thảo luận đầu tiên!</p>
                 </div>
-              )}
+              ) : (
+                messagesList.map((msg) => {
+                  // Đổi check cứng 99 thành biến động myMemberId từ Context
+                  const isMe = msg.workspaceMemberId === myMemberId || msg.isMe === true;
+                  const isEditingThis = editingMessageId === msg.messageId;
 
-              {/* Message items rendered inside useMemo Grouping */}
-              {groupedItems.map((item) => {
-                if (item.type === "divider") {
                   return (
-                    <div key={item.key} className="chat-timeline-divider">
-                      <span>{item.text}</span>
-                    </div>
-                  );
-                }
-
-                // Render Message Node
-                const msg = item.message;
-                const isMe = msg.senderId === 99;
-                const isOptimistic = msg.isOptimistic;
-                
-                return (
-                  <div 
-                    key={item.key} 
-                    className={`group flex gap-3 ${isMe ? "flex-row-reverse" : ""} ${
-                      item.isFirstInGroup ? "mt-4" : "mt-0.5"
-                    }`}
-                  >
-                    
-                    {/* Render Avatar only if first in group */}
-                    {item.isFirstInGroup ? (
-                      <div className="shrink-0">
-                        {msg.senderAvatarUrl ? (
-                          <div className="w-8 h-8 rounded-full overflow-hidden border border-white/10">
-                            <img src={msg.senderAvatarUrl} alt={msg.senderName} className="w-full h-full object-cover" />
-                          </div>
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-white/[0.05] border border-white/10 flex items-center justify-center text-xs font-bold text-slate-400">
-                            {msg.senderName.slice(0, 2).toUpperCase()}
-                          </div>
-                        )}
+                    <div
+                      key={msg.messageId}
+                      className={`flex gap-3 group max-w-2xl ${isMe ? "ml-auto flex-row-reverse" : "mr-auto"}`}
+                    >
+                      <div className="w-7 h-7 rounded-xl bg-zinc-800 border border-white/5 flex items-center justify-center font-bold text-xs text-slate-400 shrink-0 shadow-inner">
+                        {(msg.senderName || "U").substring(0, 2).toUpperCase()}
                       </div>
-                    ) : (
-                      // Placeholder spacer when collapsing
-                      <div className="w-8 shrink-0"></div>
-                    )}
 
-                    {/* Chat Bubble Area */}
-                    <div className={`flex flex-col max-w-[65%] ${isMe ? "items-end" : "items-start"}`}>
-                      
-                      {/* Name/Time Header only if first in group */}
-                      {item.isFirstInGroup && (
-                        <div className="flex items-baseline gap-2 mb-1">
-                          <span className="text-xs font-medium text-slate-350">{msg.senderName}</span>
-                          <span className="text-[9px] text-slate-500 font-mono">
-                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
+                      <div className="space-y-1 flex flex-col">
+                        <div className={`flex items-center gap-2 text-[10px] font-mono text-slate-500 ${isMe ? "justify-end" : ""}`}>
+                          <span className="font-bold text-slate-400">{msg.senderName || "User"}</span>
+                          <span>{new Date(msg.sentAt || Date.now()).toLocaleTimeString()}</span>
+                          {msg.isEdited && <span className="text-blue-500/70 text-[9px]">(đã sửa)</span>}
                         </div>
-                      )}
 
-                      {/* Text Bubble body */}
-                      <div className="relative flex items-center gap-2">
-                        
-                        {/* Action buttons drawer when hovering on hover */}
-                        {!msg.isDeleted && !isOptimistic && (
-                          <div className={`opacity-0 group-hover:opacity-100 flex items-center gap-1 absolute top-1/2 -translate-y-1/2 transition z-10 ${
-                            isMe ? "right-full mr-2" : "left-full ml-2"
-                          }`}>
-                            {isMe && (
-                              <>
+                        <div
+                          className={`p-3 rounded-2xl text-xs relative ${
+                            isMe
+                              ? "bg-blue-600 text-white rounded-tr-none shadow-md shadow-blue-900/10"
+                              : "bg-[#18181B] border border-white/5 text-slate-200 rounded-tl-none shadow-sm"
+                          }`}
+                        >
+                          {isEditingThis ? (
+                            <div className="space-y-2 min-w-[200px]">
+                              <input
+                                type="text"
+                                value={editText}
+                                onChange={(e) => setEditText(e.target.value)}
+                                className="w-full bg-black/30 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none"
+                              />
+                              <div className="flex justify-end gap-1.5 text-[10px] font-mono">
                                 <button
-                                  onClick={() => handleStartEdit(msg)}
-                                  title="Chỉnh sửa"
-                                  className="p-1 rounded bg-slate-800 border border-white/10 text-slate-400 hover:text-white transition cursor-pointer"
+                                  onClick={() => setEditingMessageId(null)}
+                                  className="px-2 py-0.5 hover:text-white text-slate-400"
                                 >
-                                  <Edit2 className="w-3 h-3" />
+                                  Hủy
                                 </button>
                                 <button
-                                  onClick={() => handleRecallMessage(msg.messageId)}
-                                  title="Thu hồi"
-                                  className="p-1 rounded bg-slate-850 border border-rose-500/20 text-rose-400 hover:bg-rose-950/20 hover:text-rose-300 transition cursor-pointer"
+                                  onClick={() => handleSaveEditMessage(msg.messageId)}
+                                  className="px-2 py-0.5 bg-white text-black rounded font-medium"
                                 >
-                                  <Trash2 className="w-3 h-3" />
+                                  Lưu
                                 </button>
-                              </>
-                            )}
-                          </div>
-                        )}
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="leading-relaxed whitespace-pre-wrap break-all">{msg.content}</p>
+                          )}
 
-                        {editingMessageId === msg.messageId ? (
-                          /* Message Inline Editing Mode */
-                          <div className="bg-slate-900 border border-blue-500/50 p-2 rounded-lg flex flex-col gap-2 min-w-[200px]">
-                            <textarea
-                              value={editingText}
-                              onChange={(e) => setEditingText(e.target.value)}
-                              className="w-full bg-slate-950 border border-white/10 rounded p-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
-                              rows={2}
-                            />
-                            <div className="flex justify-end gap-1 text-[10px]">
-                              <button 
-                                onClick={() => setEditingMessageId(null)}
-                                className="px-2 py-1 bg-white/[0.05] border border-white/10 rounded hover:bg-white/10 text-slate-400 hover:text-slate-200 cursor-pointer"
+                          {/* Render tệp đính kèm */}
+                          {msg.assets && msg.assets.length > 0 && (
+                            <div className="mt-2 pt-2 border-t border-white/10 space-y-1.5 min-w-[180px]">
+                              {msg.assets.map((asset) => (
+                                <div
+                                  key={asset.assetId}
+                                  className="flex items-center gap-2 p-1.5 rounded bg-black/20 border border-white/5 text-[11px] font-mono text-slate-300"
+                                >
+                                  {asset.fileType === "Image" ? <Image size={12} /> : <FileText size={12} />}
+                                  <span className="truncate flex-1">{asset.fileName}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Actions khi Hover chuột */}
+                          {isMe && !isEditingThis && (
+                            <div className="absolute top-1/2 -translate-y-1/2 -left-12 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-[#141416] border border-white/10 p-1 rounded-lg shadow-xl">
+                              <button
+                                onClick={() => startEditMessage(msg)}
+                                className="p-1 hover:bg-white/5 text-slate-400 hover:text-white rounded"
+                                title="Chỉnh sửa"
                               >
-                                Hủy
+                                <Edit2 size={11} />
                               </button>
-                              <button 
-                                onClick={() => handleSaveEdit(msg.messageId)}
-                                className="px-2.5 py-1 bg-blue-600 rounded hover:bg-blue-500 text-white cursor-pointer"
+                              <button
+                                onClick={() => handleDeleteMessage(msg.messageId)}
+                                className="p-1 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 rounded"
+                                title="Thu hồi"
                               >
-                                Lưu
+                                <Trash2 size={11} />
                               </button>
                             </div>
-                          </div>
-                        ) : (
-                          /* Static Message Content display */
-                          <div className={`px-4 py-2.5 rounded-2xl text-xs border ${
-                            msg.isDeleted
-                              ? "bg-transparent border-white/5 text-slate-600 italic font-mono" // recalled styling
-                              : isMe
-                                ? "bg-blue-600/90 border-blue-500/30 text-white rounded-tr-sm shadow-[0_0_15px_rgba(59,130,246,0.08)]"
-                                : "bg-white/[0.06] border-white/5 text-slate-200 rounded-tl-sm"
-                          } ${isOptimistic ? "opacity-60" : ""}`}>
-                            
-                            {/* Render text content */}
-                            <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                            
-                            {/* Render Edited Tag */}
-                            {msg.isEdited && !msg.isDeleted && (
-                              <span className="block text-[8px] text-slate-400 text-right mt-1 font-mono">
-                                (đã chỉnh sửa)
-                              </span>
-                            )}
-
-                            {/* Optimistic indicator spinner */}
-                            {isOptimistic && (
-                              <span className="block text-[8px] text-slate-400 mt-1 font-mono italic">
-                                Đang gửi...
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                      </div>
-
-                      {/* Render Attachments/Assets if exists */}
-                      {msg.assets && msg.assets.length > 0 && (
-                        <div className={`flex flex-col gap-2 mt-2 w-full max-w-[280px]`}>
-                          {msg.assets.map((asset) => {
-                            const isImg = asset.assetType.startsWith("image/");
-                            return (
-                              <div 
-                                key={asset.assetId} 
-                                className="bg-slate-900/40 border border-white/5 rounded-lg overflow-hidden flex flex-col p-2 text-[11px]"
-                              >
-                                {isImg ? (
-                                  /* Image Preview Panel */
-                                  <div className="mb-2 rounded overflow-hidden max-h-32 bg-black/30 border border-white/10 flex items-center justify-center">
-                                    <img 
-                                      src="https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=300" // mock visual
-                                      alt={asset.assetName} 
-                                      className="object-cover w-full h-full" 
-                                    />
-                                  </div>
-                                ) : null}
-                                <div className="flex items-center gap-2 text-slate-300">
-                                  {isImg ? (
-                                    <Image className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                                  ) : (
-                                    <FileText className="w-3.5 h-3.5 text-orange-400 shrink-0" />
-                                  )}
-                                  <span className="truncate flex-1 font-mono">{asset.assetName}</span>
-                                  <span className="text-[9px] text-slate-500 shrink-0">{asset.fileSizeKB} KB</span>
-                                </div>
-                              </div>
-                            );
-                          })}
+                          )}
                         </div>
-                      )}
-
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-
+                  );
+                })
+              )}
+              <div ref={messagesEndRef} />
             </div>
 
-            {/* Floating New Messages Alert Banner */}
-            {showNewMessageBanner && (
-              <button
-                onClick={() => {
-                  if (scrollContainerRef.current) {
-                    scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-                  }
-                  setShowNewMessageBanner(false);
-                }}
-                className="absolute bottom-24 left-1/2 -translate-x-1/2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-full text-xs font-medium shadow-2xl flex items-center gap-2 transition animate-bounce z-25 cursor-pointer"
-              >
-                <Bell className="w-3.5 h-3.5" />
-                <span>Có tin nhắn mới bên dưới. Cuộn xuống xem</span>
-              </button>
-            )}
-
-            {/* Input Form area */}
-            <div className="p-4 border-t border-white/10 bg-white/[0.02]">
-              
-              {/* Draft Selected Attachments list */}
+            {/* Input soạn thảo dưới đáy khung chat */}
+            <div className="p-4 border-t border-white/5 bg-[#0E0E10]/60 shrink-0 space-y-2">
               {selectedAssets.length > 0 && (
-                <div className="flex items-center gap-2 mb-3 bg-white/[0.03] border border-white/5 p-2 rounded-lg text-xs">
-                  <span className="text-slate-400 font-mono">Đính kèm:</span>
-                  {selectedAssets.map(id => (
-                    <div key={id} className="bg-slate-800 border border-white/10 px-2 py-0.5 rounded flex items-center gap-1.5 text-slate-300">
-                      <span>{id === 201 ? "regression_results.png" : "design_spec.png"}</span>
-                      <button 
-                        onClick={() => setSelectedAssets(prev => prev.filter(x => x !== id))}
-                        className="text-slate-500 hover:text-white cursor-pointer"
+                <div className="flex flex-wrap gap-2 pb-2">
+                  {selectedAssets.map((asset) => (
+                    <div
+                      key={asset.assetId}
+                      className="flex items-center gap-2 pl-2.5 pr-1.5 py-1 bg-white/5 border border-white/10 rounded-lg text-[10px] font-mono text-slate-300"
+                    >
+                      <span>{asset.fileName}</span>
+                      <button
+                        onClick={() => setSelectedAssets((p) => p.filter((x) => x.assetId !== asset.assetId))}
+                        className="p-0.5 hover:bg-white/10 rounded text-slate-500 hover:text-white"
                       >
-                        <X className="w-3 h-3" />
+                        <X size={12} />
                       </button>
                     </div>
                   ))}
                 </div>
               )}
 
-              <form onSubmit={handleSendMessage} className="bg-white/[0.03] border border-white/10 rounded-xl p-2 flex items-end gap-2 focus-within:border-blue-500/40 transition-colors">
-                
-                {/* Paperclip selector triggers mock files selection */}
-                <button
-                  type="button"
-                  title="Đính kèm file dự án"
-                  onClick={() => {
-                    const nextId = selectedAssets.includes(201) ? 202 : 201;
-                    if (!selectedAssets.includes(nextId)) {
-                      setSelectedAssets(prev => [...prev, nextId]);
-                    }
-                  }}
-                  className="p-2 text-slate-500 hover:text-slate-300 transition-colors cursor-pointer shrink-0"
-                >
-                  <Paperclip className="w-5 h-5" />
-                </button>
-
-                <textarea
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  onKeyDown={(e) => {
-                    // Send message on Enter, Shift+Enter for newline
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage(e);
-                    }
-                  }}
-                  className="flex-1 bg-transparent border-none outline-none focus:ring-0 resize-none text-xs text-white placeholder-slate-500 min-h-[40px] max-h-32 py-2"
-                  placeholder={`Nhập tin nhắn trong #${activeConversation.name}...`}
-                  rows={1}
-                />
-
-                <div className="flex items-center gap-1 p-1 shrink-0">
-                  <button 
-                    type="button" 
-                    className="p-2 text-slate-500 hover:text-slate-350 transition-colors cursor-pointer"
+              <form onSubmit={handleSendMessage} className="flex items-center gap-2 relative">
+                <div className="flex items-center gap-1 absolute left-3">
+                  <label className="p-1.5 hover:bg-white/5 rounded-lg text-slate-500 hover:text-slate-300 cursor-pointer transition-all">
+                    <Paperclip size={15} />
+                    <input type="file" multiple onChange={handleFileChange} className="hidden" />
+                  </label>
+                  <button
+                    type="button"
+                    className="p-1.5 hover:bg-white/5 rounded-lg text-slate-500 hover:text-slate-300 transition-all"
                   >
-                    <Smile className="w-5 h-5" />
-                  </button>
-                  <button 
-                    type="submit"
-                    className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition cursor-pointer"
-                  >
-                    <Send className="w-4 h-4" />
+                    <Smile size={15} />
                   </button>
                 </div>
 
-              </form>
+                <input
+                  type="text"
+                  placeholder={`Nhắn tin vào phòng #${activeConversation.name || activeConversation.conversationId}...`}
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  className="w-full bg-[#121214] border border-white/5 rounded-xl pl-20 pr-12 py-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-blue-500/50"
+                />
 
-              <div className="flex justify-between items-center mt-2 px-2 text-[10px] text-slate-500 font-mono">
-                <span>Dùng @ để nhắc tên đồng nghiệp.</span>
-                <span>Enter để Gửi • Shift+Enter để xuống dòng</span>
-              </div>
+                <button
+                  type="submit"
+                  disabled={!inputText.trim() && selectedAssets.length === 0}
+                  className="absolute right-2.5 p-2 bg-blue-600 rounded-lg text-white hover:bg-blue-500 transition-all disabled:opacity-30 disabled:hover:bg-blue-600 cursor-pointer shadow-md shadow-blue-900/20"
+                >
+                  <Send size={13} />
+                </button>
+              </form>
             </div>
           </>
         ) : (
-          /* Empty Chat Room Selector screen */
-          <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-8 text-center bg-white/[0.005]">
-            <div className="w-16 h-16 rounded-full bg-white/[0.02] border border-white/5 flex items-center justify-center text-slate-600 mb-4 shadow-inner">
-              <UserCircle className="w-8 h-8" />
+          <div className="flex-1 flex flex-col items-center justify-center text-slate-600 font-mono space-y-3">
+            <UserCircle size={40} className="text-slate-700 stroke-[1.2]" />
+            <div className="text-center space-y-1">
+              <p className="text-xs">Chưa chọn phòng hội thoại thảo luận.</p>
+              <p className="text-[10px] text-slate-700">Vui lòng chọn một phòng từ danh sách bên trái để xem tin nhắn.</p>
             </div>
-            <h3 className="text-md font-bold text-white mb-1">Chưa có hội thoại nào được chọn</h3>
-            <p className="text-xs text-slate-500 max-w-sm">
-              Chọn kênh thảo luận hoặc đồng nghiệp từ danh sách bên trái để bắt đầu nhắn tin và chia sẻ tài liệu.
-            </p>
           </div>
         )}
-
       </div>
 
-      {/* 3. Floating Simulator Toast Notification (ReceiveNotification Event) */}
-      {notificationToast && (
-        <div className="fixed top-6 right-6 w-80 bg-slate-900 border border-purple-500/40 rounded-xl p-4 shadow-2xl z-50 animate-slide-in flex gap-3 text-slate-200">
-          <div className="w-9 h-9 rounded-full bg-purple-900/30 flex items-center justify-center text-purple-400 shrink-0 shadow-inner">
-            <Bell className="w-4 h-4" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex justify-between items-start">
-              <h4 className="text-xs font-bold text-white truncate">{notificationToast.title}</h4>
-              <button 
-                onClick={() => setNotificationToast(null)}
-                className="text-slate-500 hover:text-white cursor-pointer"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-1 leading-normal">{notificationToast.message}</p>
-            <span className="text-[8px] text-slate-500 block text-right mt-2 font-mono">
-              SignalR Notification Pushed
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* 4. Real-time Event Simulator Panel Drawer Console */}
-      {isDevConsoleOpen && (
-        <div className="absolute right-4 top-16 bottom-24 w-80 bg-slate-950 border border-purple-500/20 rounded-xl flex flex-col shadow-2xl z-30 overflow-hidden font-mono text-[11px]">
-          
-          <div className="p-3 border-b border-white/10 bg-slate-900/60 flex items-center justify-between text-white">
-            <span className="font-bold flex items-center gap-1.5 text-purple-400">
-              <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-              SignalR Event Dispatcher
-            </span>
-            <button 
-              onClick={() => setIsDevConsoleOpen(false)}
-              className="text-slate-500 hover:text-white cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="p-4 flex flex-col gap-2 border-b border-white/10 bg-white/[0.01]">
-            <span className="text-slate-400 font-bold">Pushes (Server to Client):</span>
-            
-            <button
-              onClick={simulateIncomingMessage}
-              disabled={!activeConversation}
-              className="w-full text-left py-2 px-3 rounded bg-purple-900/20 hover:bg-purple-900/30 border border-purple-500/30 text-purple-300 hover:text-white cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition"
-            >
-              ⚡ MessageCreated (Nhận tin nhắn)
-            </button>
-            
-            <button
-              onClick={simulateTeammateEdit}
-              disabled={!activeConversation}
-              className="w-full text-left py-2 px-3 rounded bg-purple-900/20 hover:bg-purple-900/30 border border-purple-500/30 text-purple-300 hover:text-white cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition"
-            >
-              ⚡ MessageEdited (Sửa tin nhắn)
-            </button>
-
-            <button
-              onClick={simulateTeammateRecall}
-              disabled={!activeConversation}
-              className="w-full text-left py-2 px-3 rounded bg-purple-900/20 hover:bg-purple-900/30 border border-purple-500/30 text-purple-300 hover:text-white cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition"
-            >
-              ⚡ MessageDeleted (Thu hồi tin nhắn)
-            </button>
-
-            <button
-              onClick={simulateNotification}
-              className="w-full text-left py-2 px-3 rounded bg-purple-900/20 hover:bg-purple-900/30 border border-purple-500/30 text-purple-300 hover:text-white cursor-pointer transition"
-            >
-              ⚡ ReceiveNotification (Nhận báo chuông)
-            </button>
-
-            <button
-              onClick={simulateConversationCleared}
-              disabled={!activeConversation}
-              className="w-full text-left py-2 px-3 rounded bg-rose-950/20 hover:bg-rose-950/40 border border-rose-500/30 text-rose-300 hover:text-rose-200 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition"
-            >
-              ⚡ ConversationCleared (Giải tán phòng)
-            </button>
-          </div>
-
-          {/* Connection log trace */}
-          <div className="flex-1 flex flex-col p-3 overflow-hidden bg-black/40">
-            <span className="text-slate-500 font-bold mb-2">Live Web Socket Trace Logs:</span>
-            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1.5 pr-1 text-[10px] text-slate-400">
-              {eventLogs.length === 0 ? (
-                <span className="text-slate-600 block">No connection events recorded yet. Try clicking the simulator push buttons above!</span>
-              ) : (
-                eventLogs.map((log, i) => (
-                  <div key={i} className="leading-relaxed border-b border-white/[0.02] pb-1 font-mono break-all">{log}</div>
-                ))
-              )}
-            </div>
-          </div>
-          
-        </div>
-      )}
-
-      {/* 5. Create Conversation/Channel Modal */}
+      {/* MODAL: KHỞI TẠO CUỘC HỘI THOẠI MỚI */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-          {/* Modal Container */}
-          <div className="w-full max-w-2xl bg-neutral-950/90 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-            
-            {/* Modal Header */}
-            <div className="flex justify-between items-center px-6 py-4 border-b border-white/10 bg-white/5">
-              <h3 className="text-lg font-bold text-content-primary">Tạo cuộc hội thoại mới</h3>
-              <button 
-                onClick={() => setIsCreateModalOpen(false)}
-                className="text-content-muted hover:text-white p-1 hover:bg-white/5 rounded-md transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-white/10 border border-white/10 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+            <button
+              onClick={() => setIsCreateModalOpen(false)}
+              className="absolute right-4 top-4 text-slate-500 hover:text-white transition-colors cursor-pointer"
+            >
+              <X size={18} />
+            </button>
 
-            {/* Modal Form */}
-            <form onSubmit={handleCreateChat} className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar text-xs">
+            <h2 className="text-sm font-bold text-slate-200 mb-4 font-mono uppercase tracking-wider text-blue-400">
+              Tạo cuộc trò chuyện mới
+            </h2>
+
+            <form onSubmit={handleCreateChat} className="space-y-4">
               
-              {/* Classification Type Selector */}
+              {/* Loại cuộc hội thoại */}
               <div className="space-y-1.5">
-                <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">Phân loại hội thoại</label>
-                <select
-                  value={newChatType}
-                  onChange={(e) => {
-                    setNewChatType(e.target.value);
-                    // Reset selected members checklist with current user only
-                    setSelectedMembers([99]);
-                  }}
-                  className="w-full bg-white/[0.02] border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-white/20 hover:bg-white/[0.04] transition-all duration-200 text-content-primary"
-                >
-                  <option value="Group" className="bg-neutral-900">Nhóm chat</option>
-                  <option value="Direct" className="bg-neutral-900">Hội thoại 1-1</option>
-                  <option value="Project_Channel" className="bg-neutral-900">Kênh thảo luận dự án</option>
-                </select>
+                <label className="text-[10px] font-mono text-slate-400 uppercase tracking-wide">
+                  Loại trò chuyện
+                </label>
+                <div className="grid grid-cols-3 gap-2 font-mono text-xs">
+                  {["Direct", "Group", "Project_Channel"].map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setNewChatType(type)}
+                      className={`py-2 text-center rounded-lg border transition-all cursor-pointer ${
+                        newChatType === type
+                          ? "bg-blue-600/10 border-blue-500/50 text-blue-400 font-semibold"
+                          : "bg-white/[0.02] border-white/5 text-slate-500 hover:text-slate-300"
+                      }`}
+                    >
+                      {type === "Direct" ? "1-1" : type === "Group" ? "Nhóm" : "Kênh"}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* Conversation Title input */}
+              {/* Tên phòng (Ẩn đi nếu chọn chat Direct 1-1) */}
               {newChatType !== "Direct" && (
                 <div className="space-y-1.5">
-                  <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">Tên cuộc hội thoại / Kênh *</label>
+                  <label className="text-[10px] font-mono text-slate-400 uppercase tracking-wide">
+                    Tên cuộc hội thoại / Kênh
+                  </label>
                   <input
                     type="text"
+                    required
+                    placeholder="Nhập tên phòng thảo luận..."
                     value={newChatName}
                     onChange={(e) => setNewChatName(e.target.value)}
-                    placeholder={newChatType === "Project_Channel" ? "e.g. backend-discussion" : "e.g. Marketing Group Chat"}
-                    className="w-full bg-white/[0.02] border border-white/10 rounded-md px-3 py-2 text-sm text-content-primary focus:outline-none focus:border-white/20 hover:bg-white/[0.04] transition-all duration-200"
-                    required
+                    className="w-full bg-[#1A1A1C] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
                   />
                 </div>
               )}
 
-              {/* Members Checklist Selector */}
+              {/* Danh sách thành viên tham gia hội thoại */}
               <div className="space-y-1.5">
-                <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">
-                  {newChatType === "Direct" ? "Chọn đồng nghiệp nhắn tin *" : "Chọn thành viên tham gia *"}
+                <label className="text-[10px] font-mono text-slate-400 uppercase tracking-wide">
+                  Mời thành viên ({newChatType === "Direct" ? "Chọn 1 đồng nghiệp" : "Chọn nhiều"})
                 </label>
-                <div className="max-h-40 overflow-y-auto border border-white/10 rounded-md p-3 bg-white/[0.01] space-y-1.5 custom-scrollbar">
-                  {workspaceMembersList.map((m) => {
-                    const isMe = m.workspaceMemberId === 99;
-                    if (isMe && newChatType === "Direct") return null;
-                    
-                    const isChecked = selectedMembers.includes(m.workspaceMemberId);
-                    
-                    return (
-                      <label 
-                        key={m.workspaceMemberId}
-                        className="flex items-center justify-between p-2 rounded hover:bg-white/[0.03] cursor-pointer text-sm"
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-white/[0.05] border border-white/10 flex items-center justify-center text-[9px] font-bold text-slate-300 overflow-hidden shrink-0">
-                            {m.avatarUrl ? (
-                              <img src={m.avatarUrl} alt="" className="w-full h-full object-cover" />
-                            ) : (
-                              m.fullName.slice(0, 2).toUpperCase()
-                            )}
+                <div className="space-y-2 max-h-44 overflow-y-auto custom-scrollbar pr-1">
+                  {workspaceMembersList && workspaceMembersList
+                    .filter((m) => {
+                      const mId = Number(m.workspaceMemberId || m.id);
+                      return mId && mId !== myMemberId; // Loại bỏ chính mình ra khỏi giao diện chọn lựa
+                    })
+                    .map((m) => {
+                      const mId = Number(m.workspaceMemberId || m.id);
+                      const isSelected = selectedMembers.includes(mId);
+                      
+                      const displayName = m.resource?.fullName || m.fullName || m.name || `Thành viên ${mId}`;
+
+                      return (
+                        <label
+                          key={mId}
+                          className={`flex items-center justify-between p-2.5 rounded-lg border text-xs font-mono transition-all cursor-pointer ${
+                            isSelected
+                              ? "bg-blue-500/10 border-blue-500/30 text-blue-400"
+                              : "bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/[0.04]"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="w-5 h-5 rounded-full bg-zinc-800 border border-white/10 flex items-center justify-center font-bold text-[10px] text-zinc-400 uppercase">
+                              {displayName.charAt(0)}
+                            </div>
+                            <span className="truncate max-w-[150px]">{displayName}</span>
                           </div>
-                          <span className="text-content-secondary text-sm">{m.fullName}</span>
-                          {isMe && <span className="text-[10px] text-content-muted font-mono ml-1">(Bạn)</span>}
-                        </div>
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          disabled={isMe}
-                          onChange={() => toggleMemberSelection(m.workspaceMemberId)}
-                          className="w-4 h-4 rounded border-white/10 text-blue-600 focus:ring-0 cursor-pointer"
-                        />
-                      </label>
-                    );
-                  })}
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleMemberSelection(mId)}
+                            className="rounded border-white/10 text-blue-600 focus:ring-0 cursor-pointer"
+                          />
+                        </label>
+                      );
+                    })}
                 </div>
                 {newChatType === "Direct" && (
                   <p className="text-[10px] text-content-muted font-mono mt-1">
-                    * Đã chọn {selectedMembers.filter(id => id !== 99).length} / 1 đồng nghiệp.
+                    * Đã chọn {selectedMembers.length} / 1 đồng nghiệp.
                   </p>
                 )}
               </div>
 
-              {/* Modal Footer Actions */}
+              {/* Footer Actions Modal */}
               <div className="border-t border-white/10 pt-5 flex justify-end gap-3 bg-transparent">
                 <button
                   type="button"
@@ -1411,13 +766,10 @@ export default function Conversations() {
                   Tạo cuộc hội thoại
                 </button>
               </div>
-
             </form>
           </div>
         </div>
       )}
-
     </div>
   );
 }
-

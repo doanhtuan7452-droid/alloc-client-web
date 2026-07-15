@@ -1,21 +1,28 @@
 import { useState } from "react";
 import { X, Loader } from "lucide-react";
-import { createProject } from "../../services/mockApi";
+import ProjectService from "../../services/ProjectService";
 
-export default function CreateProjectModal({ isOpen, onClose, workspaceId, onSuccess }) {
+export default function CreateProjectModal({
+  isOpen,
+  onClose,
+  workspaceId,
+  onProjectCreated,
+}) {
   const [formData, setFormData] = useState(() => {
     const today = new Date();
     const future = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
     return {
       projectName: "",
-      expectedBudget: "",
-      totalRevenue: "0",
+      projectDescription: "",
+      expectedBudget: "0",
       startDate: today.toISOString().split("T")[0],
       endDate: future.toISOString().split("T")[0],
-      originalCurrencyCode: "USD",
-      exchangeRateToUSD: "1.0",
       methodology: "Agile",
-      status: "Planning"
+      budgetTypeKey: "Fixed",
+      originalCurrencyCode: "USD",
+      exchangeRateToUSD: "1",
+      totalRevenue: "0",
+      status: "Planning",
     };
   });
 
@@ -29,14 +36,14 @@ export default function CreateProjectModal({ isOpen, onClose, workspaceId, onSuc
     const { name, value } = e.target;
     setFormData((prev) => {
       const updated = { ...prev, [name]: value };
-      
+
       // Auto-set exchange rate for common currencies
       if (name === "originalCurrencyCode") {
         if (value === "USD") updated.exchangeRateToUSD = "1.0";
         else if (value === "VND") updated.exchangeRateToUSD = "0.00004";
         else if (value === "EUR") updated.exchangeRateToUSD = "1.08";
       }
-      
+
       return updated;
     });
 
@@ -65,7 +72,8 @@ export default function CreateProjectModal({ isOpen, onClose, workspaceId, onSuc
       const start = new Date(formData.startDate);
       const end = new Date(formData.endDate);
       if (end < start) {
-        newErrors.endDate = "Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.";
+        newErrors.endDate =
+          "Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.";
       }
     }
 
@@ -75,7 +83,10 @@ export default function CreateProjectModal({ isOpen, onClose, workspaceId, onSuc
     if (formData.totalRevenue && parseFloat(formData.totalRevenue) < 0) {
       newErrors.totalRevenue = "Doanh thu không được nhỏ hơn 0.";
     }
-    if (formData.exchangeRateToUSD && parseFloat(formData.exchangeRateToUSD) <= 0) {
+    if (
+      formData.exchangeRateToUSD &&
+      parseFloat(formData.exchangeRateToUSD) <= 0
+    ) {
       newErrors.exchangeRateToUSD = "Tỷ giá phải lớn hơn 0.";
     }
 
@@ -89,18 +100,36 @@ export default function CreateProjectModal({ isOpen, onClose, workspaceId, onSuc
 
     if (!validate()) return;
 
+    if (!workspaceId) {
+      setGeneralError("Thiếu workspaceId để tạo dự án.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      await createProject(workspaceId, formData);
+      const payload = {
+        projectName: formData.projectName,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        methodology: formData.methodology,
+        expectedBudget: Number(formData.expectedBudget || 0),
+        totalRevenue: Number(formData.totalRevenue || 0),
+        originalCurrencyCode: formData.originalCurrencyCode,
+        exchangeRateToUSD: Number(formData.exchangeRateToUSD || 1),
+        status: formData.status,
+        baselineData: formData.projectDescription || null,
+      };
+
+      await ProjectService.createProject(workspaceId, payload);
       setIsSubmitting(false);
-      onSuccess();
+      onProjectCreated?.();
       onClose();
     } catch (err) {
       setIsSubmitting(false);
       if (err.message === "ProjectNameExists") {
         setErrors((prev) => ({
           ...prev,
-          projectName: "Tên dự án đã tồn tại trong Workspace này."
+          projectName: "Tên dự án đã tồn tại trong Workspace này.",
         }));
       } else {
         setGeneralError("Lỗi hệ thống khi tạo dự án. Vui lòng thử lại.");
@@ -115,17 +144,23 @@ export default function CreateProjectModal({ isOpen, onClose, workspaceId, onSuc
       <div className="w-full max-w-2xl bg-neutral-950/90 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
         {/* Modal Header */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-white/10 bg-white/5">
-          <h3 className="text-lg font-bold text-content-primary">Create New Project</h3>
-          <button 
+          <h3 className="text-lg font-bold text-content-primary">
+            Create New Project
+          </h3>
+          <button
+            type="button"
             onClick={onClose}
-            className="text-content-muted hover:text-white p-1 hover:bg-white/5 rounded-md transition-colors"
+            className="text-content-muted hover:text-white p-1 hover:bg-white/5 rounded-md transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Modal Form */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
+        <form
+          onSubmit={handleSubmit}
+          className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar"
+        >
           {generalError && (
             <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-md">
               {generalError}
@@ -134,7 +169,9 @@ export default function CreateProjectModal({ isOpen, onClose, workspaceId, onSuc
 
           {/* Project Name */}
           <div className="space-y-1.5">
-            <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">Project Name *</label>
+            <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">
+              Project Name *
+            </label>
             <input
               type="text"
               name="projectName"
@@ -146,42 +183,48 @@ export default function CreateProjectModal({ isOpen, onClose, workspaceId, onSuc
               }`}
             />
             {errors.projectName && (
-              <p className="text-[11px] text-rose-400 font-medium">{errors.projectName}</p>
+              <p className="text-[11px] text-rose-400 font-medium">
+                {errors.projectName}
+              </p>
             )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Methodology */}
             <div className="space-y-1.5">
-              <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">Methodology</label>
+              <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">
+                Methodology
+              </label>
               <select
                 name="methodology"
                 value={formData.methodology}
                 onChange={handleInputChange}
-                className="w-full bg-white/[0.02] border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-white/20 hover:bg-white/[0.04] transition-all duration-200 text-content-primary"
+                className="w-full bg-neutral-900 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-white/20 hover:bg-white/[0.04] transition-all duration-200 text-content-primary cursor-pointer"
               >
-                <option value="Agile">Agile</option>
-                <option value="Scrum">Scrum</option>
-                <option value="Kanban">Kanban</option>
-                <option value="Waterfall">Waterfall</option>
-                <option value="Hybrid">Hybrid</option>
+                <option value="Agile" className="bg-neutral-900 text-white">Agile</option>
+                <option value="Scrum" className="bg-neutral-900 text-white">Scrum</option>
+                <option value="Kanban" className="bg-neutral-900 text-white">Kanban</option>
+                <option value="Waterfall" className="bg-neutral-900 text-white">Waterfall</option>
+                <option value="Hybrid" className="bg-neutral-900 text-white">Hybrid</option>
               </select>
             </div>
 
             {/* Status */}
             <div className="space-y-1.5">
-              <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">Initial Status</label>
+              <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">
+                Initial Status
+              </label>
               <select
                 name="status"
                 value={formData.status}
                 onChange={handleInputChange}
-                className="w-full bg-white/[0.02] border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-white/20 hover:bg-white/[0.04] transition-all duration-200 text-content-primary"
+                className="w-full bg-neutral-900 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-white/20 hover:bg-white/[0.04] transition-all duration-200 text-content-primary cursor-pointer"
               >
-                <option value="Planning">Planning</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Completed">Completed</option>
-                <option value="On Hold">On Hold</option>
-                <option value="Cancelled">Cancelled</option>
+                <option value="Planning" className="bg-neutral-900 text-white">Planning</option>
+                <option value="In Progress" className="bg-neutral-900 text-white">In Progress</option>
+                <option value="Completed" className="bg-neutral-900 text-white">Completed</option>
+                <option value="On Hold" className="bg-neutral-900 text-white">On Hold</option>
+                <option value="Cancelled" className="bg-neutral-900 text-white">Cancelled</option>
               </select>
             </div>
           </div>
@@ -189,22 +232,26 @@ export default function CreateProjectModal({ isOpen, onClose, workspaceId, onSuc
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Currency */}
             <div className="space-y-1.5">
-              <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">Currency</label>
+              <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">
+                Currency
+              </label>
               <select
                 name="originalCurrencyCode"
                 value={formData.originalCurrencyCode}
                 onChange={handleInputChange}
-                className="w-full bg-white/[0.02] border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-white/20 hover:bg-white/[0.04] transition-all duration-200 text-content-primary"
+                className="w-full bg-neutral-900 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-white/20 hover:bg-white/[0.04] transition-all duration-200 text-content-primary cursor-pointer"
               >
-                <option value="USD">USD ($)</option>
-                <option value="VND">VND (₫)</option>
-                <option value="EUR">EUR (€)</option>
+                <option value="USD" className="bg-neutral-900 text-white">USD ($)</option>
+                <option value="VND" className="bg-neutral-900 text-white">VND (₫)</option>
+                <option value="EUR" className="bg-neutral-900 text-white">EUR (€)</option>
               </select>
             </div>
 
             {/* Expected Budget */}
             <div className="space-y-1.5 col-span-2">
-              <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">Expected Budget</label>
+              <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">
+                Expected Budget
+              </label>
               <input
                 type="number"
                 name="expectedBudget"
@@ -216,7 +263,9 @@ export default function CreateProjectModal({ isOpen, onClose, workspaceId, onSuc
                 }`}
               />
               {errors.expectedBudget && (
-                <p className="text-[11px] text-rose-400 font-medium">{errors.expectedBudget}</p>
+                <p className="text-[11px] text-rose-400 font-medium">
+                  {errors.expectedBudget}
+                </p>
               )}
             </div>
           </div>
@@ -224,7 +273,9 @@ export default function CreateProjectModal({ isOpen, onClose, workspaceId, onSuc
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Total Revenue */}
             <div className="space-y-1.5">
-              <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">Total Revenue</label>
+              <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">
+                Total Revenue
+              </label>
               <input
                 type="number"
                 name="totalRevenue"
@@ -236,13 +287,17 @@ export default function CreateProjectModal({ isOpen, onClose, workspaceId, onSuc
                 }`}
               />
               {errors.totalRevenue && (
-                <p className="text-[11px] text-rose-400 font-medium">{errors.totalRevenue}</p>
+                <p className="text-[11px] text-rose-400 font-medium">
+                  {errors.totalRevenue}
+                </p>
               )}
             </div>
 
             {/* Exchange Rate to USD */}
             <div className="space-y-1.5">
-              <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">Exchange Rate to USD</label>
+              <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">
+                Exchange Rate to USD
+              </label>
               <input
                 type="number"
                 step="any"
@@ -250,11 +305,15 @@ export default function CreateProjectModal({ isOpen, onClose, workspaceId, onSuc
                 value={formData.exchangeRateToUSD}
                 onChange={handleInputChange}
                 className={`w-full bg-white/[0.02] border rounded-md px-3 py-2 text-sm text-content-primary focus:outline-none focus:border-white/20 hover:bg-white/[0.04] transition-all duration-200 ${
-                  errors.exchangeRateToUSD ? "border-rose-500" : "border-white/10"
+                  errors.exchangeRateToUSD
+                    ? "border-rose-500"
+                    : "border-white/10"
                 }`}
               />
               {errors.exchangeRateToUSD && (
-                <p className="text-[11px] text-rose-400 font-medium">{errors.exchangeRateToUSD}</p>
+                <p className="text-[11px] text-rose-400 font-medium">
+                  {errors.exchangeRateToUSD}
+                </p>
               )}
             </div>
           </div>
@@ -262,7 +321,9 @@ export default function CreateProjectModal({ isOpen, onClose, workspaceId, onSuc
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Start Date */}
             <div className="space-y-1.5">
-              <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">Start Date *</label>
+              <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">
+                Start Date *
+              </label>
               <input
                 type="date"
                 name="startDate"
@@ -273,13 +334,17 @@ export default function CreateProjectModal({ isOpen, onClose, workspaceId, onSuc
                 }`}
               />
               {errors.startDate && (
-                <p className="text-[11px] text-rose-400 font-medium">{errors.startDate}</p>
+                <p className="text-[11px] text-rose-400 font-medium">
+                  {errors.startDate}
+                </p>
               )}
             </div>
 
             {/* End Date */}
             <div className="space-y-1.5">
-              <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">End Date *</label>
+              <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">
+                End Date *
+              </label>
               <input
                 type="date"
                 name="endDate"
@@ -290,7 +355,9 @@ export default function CreateProjectModal({ isOpen, onClose, workspaceId, onSuc
                 }`}
               />
               {errors.endDate && (
-                <p className="text-[11px] text-rose-400 font-medium">{errors.endDate}</p>
+                <p className="text-[11px] text-rose-400 font-medium">
+                  {errors.endDate}
+                </p>
               )}
             </div>
           </div>
@@ -301,14 +368,14 @@ export default function CreateProjectModal({ isOpen, onClose, workspaceId, onSuc
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 border border-white/10 rounded-md bg-white/5 text-slate-350 hover:bg-white/10 hover:text-white text-sm font-medium transition-all"
+              className="px-4 py-2 border border-white/10 rounded-md bg-white/5 text-slate-350 hover:bg-white/10 hover:text-white text-sm font-medium transition-all cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-5 py-2 rounded-md bg-slate-200 hover:bg-white text-neutral-950 text-sm font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-white/5 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="px-5 py-2 rounded-md bg-slate-200 hover:bg-white text-neutral-950 text-sm font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-white/5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               {isSubmitting && <Loader className="w-4 h-4 animate-spin" />}
               {isSubmitting ? "Creating..." : "Create Project"}
