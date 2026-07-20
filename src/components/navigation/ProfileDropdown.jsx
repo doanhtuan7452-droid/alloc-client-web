@@ -12,11 +12,11 @@ import {
 } from "lucide-react";
 import Avatar from "../ui/Avatar";
 import AuthService from "../../services/AuthService";
+import { useUser } from "../../contexts/UserContext";
 
 const menuItems = [
   { label: "Hồ sơ của tôi", to: "/profile", icon: User },
   { label: "Thông báo", to: "/notifications", icon: Bell },
-  { label: "Tin nhắn", to: "/conversations", icon: MessageSquareText },
   { label: "Timesheets", to: "/timesheets", icon: Clock3 },
   { label: "AI Insights", to: "/ai-insights", icon: Sparkles },
 ];
@@ -28,30 +28,15 @@ export default function ProfileDropdown() {
   const buttonRef = useRef(null);
   const panelRef = useRef(null);
   const navigate = useNavigate();
+  
+  const { currentUser, setCurrentUser, setPermissions, setCurrentWorkspaceRole } = useUser();
 
-  // Quản lý thông tin User lấy từ API
-  const [userData, setUserData] = useState({
-    name: "Đang tải...",
-    email: "...",
-    avatarUrl: "",
-  });
-
-  // Tự động kích hoạt gọi API /accounts/me
-  useEffect(() => {
-    const loadUserProfile = async () => {
-      const response = await AuthService.getCurrentUser();
-      if (response) {
-        const profile = response.profile || {};
-        setUserData({
-          name: profile.fullName || "User Alloc",
-          email: response.email || "nguoidung@gmail.com",
-          avatarUrl: profile.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.fullName || "U")}`,
-        });
-      }
-    };
-
-    loadUserProfile();
-  }, []);
+  const profile = currentUser?.profile || {};
+  const userData = {
+    name: profile.fullName || "User Alloc",
+    email: currentUser?.email || "nguoidung@gmail.com",
+    avatarUrl: profile.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.fullName || "U")}`,
+  };
 
   const updateMenuPosition = () => {
     if (!buttonRef.current) return;
@@ -62,6 +47,7 @@ export default function ProfileDropdown() {
     });
   };
 
+  // Click bên ngoài hoặc nhấn ESC để đóng dropdown
   useEffect(() => {
     const handlePointerDown = (event) => {
       const clickedInsideTrigger = dropdownRef.current && dropdownRef.current.contains(event.target);
@@ -85,6 +71,7 @@ export default function ProfileDropdown() {
     };
   }, []);
 
+  // Theo dõi vị trí khi cuộn hoặc resize màn hình
   useEffect(() => {
     if (!open) return undefined;
 
@@ -107,7 +94,13 @@ export default function ProfileDropdown() {
     } catch (error) {
       console.error("Logout failed:", error);
     } finally {
-      navigate("/login/email", { replace: true });
+      // 1. Reset sạch sẽ Global State của user cũ để bảo mật
+      if (setCurrentUser) setCurrentUser(null);
+      if (setPermissions) setPermissions([]);
+      if (setCurrentWorkspaceRole) setCurrentWorkspaceRole(null);
+
+      // 2. Điều hướng về trang đăng nhập
+      navigate("/login", { replace: true });
     }
   };
 
@@ -146,7 +139,7 @@ export default function ProfileDropdown() {
         createPortal(
           <div
             ref={panelRef}
-            className="fixed z-[100] w-72 overflow-hidden rounded-2xl border border-slate-700/80 bg-[#0b1220] shadow-2xl shadow-black/50 ring-1 ring-white/5"
+            className="fixed z-[100] w-72 overflow-hidden rounded-2xl border border-slate-700/80 bg-white/5 backdrop-blur-md shadow-2xl shadow-black/50 ring-1 ring-white/5"
             style={{
               top: `${menuPosition.top}px`,
               right: `${menuPosition.right}px`,
@@ -155,7 +148,6 @@ export default function ProfileDropdown() {
           >
             <div className="border-b border-white/10 px-4 py-4">
               <div className="flex items-center gap-3">
-                {/* 🌟 ĐÃ FIX: Thay đổi từ biến chết sang dữ liệu state userData thật */}
                 <Avatar src={userData.avatarUrl} alt={userData.name} size="w-11 h-11" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-content-primary">

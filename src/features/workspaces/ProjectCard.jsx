@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MoreVertical, Calendar, Landmark, Layers, Edit2, X, Loader2, ChevronDown } from "lucide-react";
+import { MoreVertical, Calendar, Landmark, Layers, Edit2, Trash2, X, Loader2, ChevronDown } from "lucide-react";
 import ProjectService from "../../services/ProjectService";
 
-export default function ProjectCard({ project, onMenuClick }) {
+// 🌟 Thêm prop isOwner nhận từ file cha truyền xuống
+export default function ProjectCard({ project, onMenuClick, isOwner }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const {
@@ -19,7 +20,7 @@ export default function ProjectCard({ project, onMenuClick }) {
     exchangeRateToUSD,
     methodology,
     createdAt,
-    progressPercentage: progress
+    progress = project.progressPercentage 
   } = project;
 
   const workspaceId = projectWorkspaceId || searchParams.get("workspaceId") || "12";
@@ -55,7 +56,7 @@ export default function ProjectCard({ project, onMenuClick }) {
     navigate(`/workspaces/board?workspaceId=${workspaceId}&projectId=${projectId}`);
   };
 
-  // Xử lý gửi dữ liệu cập nhật dự án (PUT /projects/{id})
+  // Xử lý cập nhật dự án
   const handleUpdateProject = async (e) => {
     e.preventDefault();
     if (!editName.trim()) {
@@ -67,13 +68,18 @@ export default function ProjectCard({ project, onMenuClick }) {
     setFormError("");
 
     try {
+      // Giữ nguyên dạng YYYY-MM-DD phù hợp với DateOnly của Backend
+      const formattedStartDate = editStartDate.trim() === "" ? null : editStartDate;
+      const formattedEndDate = editEndDate.trim() === "" ? null : editEndDate;
+
       const payload = {
         projectName: editName.trim(),
         status: editStatus,
         methodology: editMethodology,
-        expectedBudget: Number(editBudget),
-        startDate: editStartDate,
-        endDate: editEndDate,
+        expectedBudget: editBudget === "" ? 0 : Number(editBudget), 
+        totalRevenue: totalRevenue,    // 🌟 THÊM TRƯỜNG NÀY: Gửi lại giá trị doanh thu hiện tại để thỏa mãn validation của backend
+        startDate: formattedStartDate, 
+        endDate: formattedEndDate,     
         originalCurrencyCode,
         exchangeRateToUSD
       };
@@ -88,9 +94,35 @@ export default function ProjectCard({ project, onMenuClick }) {
       }
     } catch (err) {
       console.error("Error updating project:", err);
-      setFormError(err?.response?.data?.message || "Có lỗi xảy ra khi cập nhật thông tin dự án.");
+      // Hiển thị chi tiết lỗi từ validation của backend nếu có
+      setFormError(err?.response?.data?.errors 
+        ? JSON.stringify(err.response.data.errors) 
+        : (err?.response?.data?.message || "Có lỗi xảy ra khi cập nhật thông tin dự án."));
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // 🌟 Hàm xử lý Xóa dự án
+  const handleDeleteProject = async (e) => {
+    e.stopPropagation(); // Ngăn hành vi click thẻ card mở trang board
+    
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa dự án "${projectName}" không? Hành động này không thể hoàn tác.`)) {
+      return;
+    }
+
+    try {
+      await ProjectService.deleteProject(projectId);
+      setIsDropdownOpen(false);
+      
+      if (onMenuClick) {
+        onMenuClick(); // Gọi callback để component cha cập nhật lại danh sách dữ liệu
+      } else {
+        window.location.reload();
+      }
+    } catch (err) {
+      console.error("Error deleting project:", err);
+      alert(err?.response?.data?.message || "Có lỗi xảy ra khi xóa dự án.");
     }
   };
 
@@ -119,7 +151,6 @@ export default function ProjectCard({ project, onMenuClick }) {
     return d.toLocaleDateString("vi-VN");
   };
 
-  // 🌟 ĐỔI THÀNH THỜI GIAN THỰC (Thay vì fix cứng 2026-06-15)
   const today = new Date();
   const end = new Date(endDate);
   const msInDay = 24 * 60 * 60 * 1000;
@@ -161,34 +192,47 @@ export default function ProjectCard({ project, onMenuClick }) {
           </div>
           
           {/* Actions Button */}
-          <div className="relative" ref={dropdownRef}>
-            <button 
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation(); // 🌟 Ngăn không nhảy vào trang Board khi nhấn menu ba chấm
-                setIsDropdownOpen(!isDropdownOpen);
-              }}
-              className="text-content-muted hover:text-white p-1 hover:bg-white/5 rounded transition-colors cursor-pointer"
-            >
-              <MoreVertical className="w-4 h-4" />
-            </button>
+          {/* 🌟 KIỂM TRA ROLE OWNER: Chỉ hiển thị khối này nếu isOwner = true */}
+          {isOwner && (
+            <div className="relative" ref={dropdownRef}>
+              <button 
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation(); 
+                  setIsDropdownOpen(!isDropdownOpen);
+                }}
+                className="text-content-muted hover:text-white p-1 hover:bg-white/5 rounded transition-colors cursor-pointer"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </button>
 
-            {isDropdownOpen && (
-              <div className="absolute right-0 mt-1 w-36 bg-neutral-900 border border-white/10 rounded-md shadow-2xl py-1 z-30 animate-fade-in">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation(); // 🌟 Ngăn kích hoạt nhảy trang khi click nút sửa
-                    setIsDropdownOpen(false);
-                    setIsEditModalOpen(true);
-                  }}
-                  className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-white/5 hover:text-white flex items-center gap-2 transition-colors cursor-pointer"
-                >
-                  <Edit2 size={12} className="text-blue-400" /> Chỉnh sửa dự án
-                </button>
-              </div>
-            )}
-          </div>
+              {isDropdownOpen && (
+                <div className="absolute right-0 mt-1 w-36 bg-neutral-900 border border-white/10 rounded-md shadow-2xl py-1 z-30 animate-fade-in-down">
+                  {/* Nút Sửa */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation(); 
+                      setIsDropdownOpen(false);
+                      setIsEditModalOpen(true);
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-white/5 hover:text-white flex items-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <Edit2 size={12} className="text-blue-400" /> Chỉnh sửa dự án
+                  </button>
+                  
+                  {/* 🌟 Nút Xóa mới thêm */}
+                  <button
+                    type="button"
+                    onClick={handleDeleteProject}
+                    className="w-full text-left px-3 py-2 text-xs text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 flex items-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <Trash2 size={12} className="text-rose-400" /> Xóa dự án
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         
         {/* Project Identifier */}
@@ -281,18 +325,18 @@ export default function ProjectCard({ project, onMenuClick }) {
         </div>
       </div>
 
-      {/* EDIT PROJECT MODAL COMPONENT (Glassmorphic) */}
+      {/* EDIT PROJECT MODAL COMPONENT */}
       {isEditModalOpen && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in" 
           onClick={(e) => {
-            e.stopPropagation(); // 🌟 Tránh lan truyền sự kiện ra ngoài card
+            e.stopPropagation(); 
             setIsEditModalOpen(false);
           }}
         >
           <div 
             className="w-full max-w-lg bg-[#121214]/90 border border-white/10 rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-hidden"
-            onClick={(e) => e.stopPropagation()} // 🌟 Tránh click bên trong form làm đóng modal
+            onClick={(e) => e.stopPropagation()} 
           >
             {/* Header Form */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/[0.01]">

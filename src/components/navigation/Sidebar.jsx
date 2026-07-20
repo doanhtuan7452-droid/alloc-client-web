@@ -122,10 +122,7 @@ export default function Sidebar() {
                 );
               })}
             </div>
-
-            <NavLink to="/conversations" className={({ isActive }) => `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all ${isActive ? 'bg-neutral-800 text-white' : 'text-content-muted hover:text-white hover:bg-neutral-800/50'}`}>
-              <MessageCircleIcon size={16} color="currentColor" /> Conversations
-            </NavLink>
+            
             <NavLink to="/timesheets" className={({ isActive }) => `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all ${isActive ? 'bg-neutral-800 text-white' : 'text-content-muted hover:text-white hover:bg-neutral-800/50'}`}>
               <Clock size={16} color="currentColor" /> Timesheets
             </NavLink>

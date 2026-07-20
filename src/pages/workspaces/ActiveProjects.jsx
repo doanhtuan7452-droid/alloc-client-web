@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useOutletContext } from "react-router-dom";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, RefreshCw } from "lucide-react";
+import { useUser } from "../../contexts/UserContext";
+import ReviewCycleService from "../../services/ReviewCycleService";
 import {
   Plus,
   Users,
@@ -25,11 +27,12 @@ import WorkspaceService from "../../services/WorkspaceService";
 import ProjectCard from "../../features/workspaces/ProjectCard";
 import ProjectSkeleton from "../../features/workspaces/ProjectSkeleton";
 import CreateProjectModal from "../../features/workspaces/CreateProjectModal";
+import ProjectService from "../../services/ProjectService";
 
 export default function ActiveProjects() {
   const [searchParams] = useSearchParams();
   const workspaceIdParam = searchParams.get("workspaceId");
-
+  
   const { 
     workspaceInfo, 
     projectsList, 
@@ -37,10 +40,28 @@ export default function ActiveProjects() {
     error, 
     searchQuery, 
     setSearchQuery, 
-    setRefreshTrigger 
+    setRefreshTrigger,
   } = useOutletContext() || {};
+  const [progressMap, setProgressMap] = useState({});
+
+  
+  const { currentWorkspaceRole } = useUser() || {};
+  const isWorkspaceOwner = currentWorkspaceRole?.roleName?.toLowerCase() === "owner";
+
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // STATES: Quản lý Review Cycles
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [reviewCycles, setReviewCycles] = useState([]);
+  const [isLoadingCycles, setIsLoadingCycles] = useState(false);
+  const [isActionProcessing, setIsActionProcessing] = useState(null); // Lưu ID của cycle đang xử lý hành động
+
+  // Thêm các state này để xử lý Form tạo mới
+  const [isCreatingCycle, setIsCreatingCycle] = useState(false);
+  const [newCycleName, setNewCycleName] = useState("");
+  const [newStartDate, setNewStartDate] = useState("");
+  const [newEndDate, setNewEndDate] = useState("");
 
   // States quản lý modal mời thành viên
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -70,6 +91,138 @@ export default function ActiveProjects() {
   const [workspaceMembers, setWorkspaceMembers] = useState([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [statusUpdatingId, setStatusUpdatingId] = useState(null);
+
+  const handleCreateReviewCycle = async (e) => {
+    e.preventDefault();
+    if (!workspaceIdParam || !newCycleName.trim() || !newStartDate || !newEndDate) return;
+
+    setIsActionProcessing("creating");
+    try {
+      const wId = parseInt(workspaceIdParam);
+      const payload = {
+        name: newCycleName.trim(),
+        startDate: new Date(newStartDate).toISOString(),
+        endDate: new Date(newEndDate).toISOString()
+      };
+
+      // Đảm bảo ReviewCycleService của bạn đã định nghĩa hàm createReviewCycle
+      await ReviewCycleService.createReviewCycle(wId, payload);
+      
+      alert("Tạo chu kỳ đánh giá mới thành công!");
+      setNewCycleName("");
+      setNewStartDate("");
+      setNewEndDate("");
+      setIsCreatingCycle(false);
+      await loadReviewCycles(); // Tải lại danh sách sau khi tạo
+    } catch (err) {
+      console.error("Lỗi khi tạo chu kỳ đánh giá:", err);
+      alert(err?.response?.data?.message || "Không thể tạo chu kỳ đánh giá mới.");
+    } finally {
+      setIsActionProcessing(null);
+    }
+  };
+
+  const loadReviewCycles = async () => {
+    if (!workspaceIdParam) return;
+    setIsLoadingCycles(true);
+    try {
+      const parsedId = parseInt(workspaceIdParam);
+      const response = await ReviewCycleService.getReviewCycles(parsedId);
+      // Tùy theo cấu trúc trả về, lấy mảng từ response.items hoặc response.data hoặc trực tiếp response
+      const cyclesArray = response?.items || response?.data || response;
+      setReviewCycles(Array.isArray(cyclesArray) ? cyclesArray : []);
+    } catch (err) {
+      console.error("Lỗi khi tải chu kỳ đánh giá:", err);
+      setReviewCycles([]);
+    } finally {
+      setIsLoadingCycles(false);
+    }
+  };
+
+  // Tự động tải lại danh sách chu kỳ mỗi khi người dùng mở Modal lên
+  useEffect(() => {
+    if (isReviewModalOpen) {
+      loadReviewCycles();
+    }
+  }, [isReviewModalOpen, workspaceIdParam]);
+
+
+  const handleStartReviewCycle = async (cycleId) => {
+  if (!workspaceIdParam) return;
+  if (!window.confirm("Bạn có chắc chắn muốn bắt đầu chu kỳ đánh giá này (Draft -> Active)?")) return;
+
+  setIsActionProcessing(cycleId);
+  try {
+    const wId = parseInt(workspaceIdParam);
+    await ReviewCycleService.startReviewCycle(wId, cycleId);
+    alert("Đã bắt đầu chu kỳ đánh giá thành công!");
+    await loadReviewCycles(); // Refresh lại danh sách
+  } catch (err) {
+    console.error(err);
+    alert(err?.response?.data?.message || "Không thể bắt đầu chu kỳ đánh giá.");
+  } finally {
+    setIsActionProcessing(null);
+  }
+};
+
+const handleCompleteReviewCycle = async (cycleId) => {
+  if (!workspaceIdParam) return;
+  if (!window.confirm("Bạn có chắc chắn muốn kết thúc chu kỳ này và kích hoạt tính lại điểm?")) return;
+
+  setIsActionProcessing(cycleId);
+  try {
+    const wId = parseInt(workspaceIdParam);
+    await ReviewCycleService.completeReviewCycle(wId, cycleId);
+    alert("Đã hoàn thành chu kỳ đánh giá thành công!");
+    await loadReviewCycles(); // Refresh lại danh sách
+  } catch (err) {
+    console.error(err);
+    alert(err?.response?.data?.message || "Không thể hoàn thành chu kỳ đánh giá.");
+  } finally {
+    setIsActionProcessing(null);
+  }
+};
+
+
+  useEffect(() => {
+    // Tránh chạy khi projectsList chưa có dữ liệu thật
+    if (!projectsList || projectsList.length === 0) return;
+
+    let isMounted = true; // Flag chống tràn memory leak khi component unmount
+
+    const fetchAllProgress = async () => {
+      try {
+        const progressData = {};
+        
+        // Gọi API song song cho tất cả các project hiện có
+        await Promise.all(
+          projectsList.map(async (project) => {
+            if (!project.projectId) return;
+            try {
+              const res = await ProjectService.getProjectProgress(project.projectId);
+              progressData[project.projectId] = res?.simpleProgress ?? 0;
+            } catch (err) {
+              console.error(`Lỗi khi lấy tiến độ project ${project.projectId}:`, err);
+              progressData[project.projectId] = 0; 
+            }
+          })
+        );
+
+        // Chỉ cập nhật state nếu component vẫn đang hiển thị
+        if (isMounted) {
+          setProgressMap(progressData);
+        }
+      } catch (globalErr) {
+        console.error("Lỗi tổng hợp fetch progress:", globalErr);
+      }
+    };
+
+    fetchAllProgress();
+
+    return () => {
+      isMounted = false; // Dọn dẹp flag khi unmount
+    };
+  }, [projectsList]);
 
   // Đặt lại ô tìm kiếm về rỗng khi chuyển trang
   useEffect(() => {
@@ -391,6 +544,20 @@ export default function ActiveProjects() {
           </div>
 
           <div className="flex items-center gap-3 w-full md:w-auto">
+          
+          {isWorkspaceOwner && (
+            <button
+              type="button"
+              onClick={() => setIsReviewModalOpen(true)}
+              disabled={!workspaceIdParam || isLoading}
+              className="flex items-center gap-2 px-4 py-2.5 bg-amber-600/10 hover:bg-amber-600/20 border border-amber-500/30 hover:border-amber-500/50 text-amber-400 hover:text-amber-300 rounded-md text-sm font-medium transition-all cursor-pointer disabled:opacity-40"
+            >
+              <ClipboardList className="w-4 h-4" /> Review Cycles
+            </button>
+          )}
+
+          {/* 1. NÚT MANAGE ROLES (Chỉ hiện nếu là Owner) */}
+          {isWorkspaceOwner && (
             <button
               type="button"
               onClick={() => {
@@ -404,20 +571,22 @@ export default function ActiveProjects() {
             >
               <Settings className="w-4 h-4" /> Manage Roles
             </button>
-            
-            {/* Nút Chat Room thêm mới */}
-            <button
-              type="button"
-              onClick={() => {
-                // Chuyển hướng sang route /conversations (hoặc route tương ứng của bạn) kèm workspaceId hiện tại
-                window.location.href = `/conversations?workspaceId=${workspaceIdParam}&isCreating=true`;
-              }}
-              disabled={!workspaceIdParam || isLoading}
-              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 hover:border-blue-500/50 text-blue-400 hover:text-blue-300 rounded-md text-sm font-medium transition-all cursor-pointer disabled:opacity-40"
-            >
-              <MessageSquare className="w-4 h-4" /> Chat Room
-            </button>
+          )}
+          
+          {/* Nút Chat Room giữ nguyên cho tất cả mọi người */}
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = `/conversations?workspaceId=${workspaceIdParam}&isCreating=true`;
+            }}
+            disabled={!workspaceIdParam || isLoading}
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 hover:border-blue-500/50 text-blue-400 hover:text-blue-300 rounded-md text-sm font-medium transition-all cursor-pointer disabled:opacity-40"
+          >
+            <MessageSquare className="w-4 h-4" /> Chat Room
+          </button>
 
+          {/* 2. NÚT INVITE MEMBER (Chỉ hiện nếu là Owner) */}
+          {isWorkspaceOwner && (
             <button
               type="button"
               onClick={() => setIsInviteModalOpen(true)}
@@ -426,7 +595,10 @@ export default function ActiveProjects() {
             >
               <UserPlus className="w-4 h-4" /> Invite Member
             </button>
+          )}
 
+          {/* 3. NÚT NEW PROJECT (Chỉ hiện nếu là Owner) */}
+          {isWorkspaceOwner && (
             <button
               type="button"
               onClick={() => setIsModalOpen(true)}
@@ -435,7 +607,8 @@ export default function ActiveProjects() {
             >
               <Plus className="w-4 h-4" /> New Project
             </button>
-          </div>
+          )}
+        </div>
         </div>
       </div>
 
@@ -510,15 +683,17 @@ export default function ActiveProjects() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredProjects.map((project) => {
-                const total = project.totalTasks || 0;
-                const completed = project.completedTasks || 0;
-                const calculatedProgress = total > 0 ? Math.round((completed / total) * 100) : project.progress || 0;
+             {filteredProjects.map((project) => {
+                const progress = progressMap[String(project.projectId)] ?? project.progress ?? 0;
+
+                // 🌟 BẬT NÚT 3 CHẤM: Nếu vai trò hiện tại trong Workspace được xác định là "Owner"
+                const isWorkspaceOwner = currentWorkspaceRole?.roleName?.toLowerCase() === "owner";
 
                 return (
                   <ProjectCard
                     key={project.projectId}
-                    project={{ ...project, progress: calculatedProgress }}
+                    isOwner={isWorkspaceOwner} 
+                    project={{ ...project, progress: progress }}
                     onMenuClick={() => typeof setRefreshTrigger === "function" && setRefreshTrigger((prev) => prev + 1)}
                   />
                 );
@@ -527,6 +702,181 @@ export default function ActiveProjects() {
           )}
         </div>
       </div>
+
+      {/* ==================== MODAL 5: BẢNG QUẢN LÝ CHU KỲ ĐÁNH GIÁ (REVIEW CYCLES) ==================== */}
+      {isReviewModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-[#121214] border border-white/10 rounded-2xl w-full max-w-4xl h-[75vh] flex flex-col shadow-2xl relative overflow-hidden">
+            
+            {/* Header Modal */}
+            <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ClipboardList className="w-5 h-5 text-amber-400" />
+                <h2 className="text-base font-bold text-white uppercase tracking-wider font-mono">
+                  Quản lý Chu kỳ Đánh giá Hiệu suất
+                </h2>
+              </div>
+              <div className="flex items-center gap-3">
+                {isWorkspaceOwner && !isCreatingCycle && (
+                  <button 
+                    type="button"
+                    onClick={() => setIsCreatingCycle(true)}
+                    className="text-xs font-mono font-semibold bg-amber-600/20 text-amber-400 hover:bg-amber-600/30 border border-amber-500/30 px-3 py-1 rounded-md cursor-pointer transition-all flex items-center gap-1"
+                  >
+                    <Plus size={14} /> Thêm chu kỳ
+                  </button>
+                )}
+                <button onClick={() => { setIsReviewModalOpen(false); setIsCreatingCycle(false); }} className="text-slate-500 hover:text-white cursor-pointer">
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Nội dung Modal */}
+            <div className="flex-1 p-6 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+              
+              {/* FORM TẠO MỚI CHU KỲ ĐÁNH GIÁ */}
+              {isCreatingCycle && (
+                <form onSubmit={handleCreateReviewCycle} className="bg-white/[0.02] border border-white/10 p-4 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between border-b border-white/5 pb-2 mb-2">
+                    <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wide font-mono">Tạo thiết lập chu kỳ mới</h3>
+                    <button type="button" onClick={() => setIsCreatingCycle(false)} className="text-xs text-rose-400 hover:underline">Hủy bỏ</button>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono text-slate-400 uppercase">Tên chu kỳ</label>
+                      <input 
+                        type="text" 
+                        required 
+                        placeholder="Ví dụ: Thống kê Q1-2026" 
+                        value={newCycleName}
+                        onChange={(e) => setNewCycleName(e.target.value)}
+                        className="w-full bg-neutral-900 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono text-slate-400 uppercase">Ngày bắt đầu</label>
+                      <input 
+                        type="date" 
+                        required 
+                        value={newStartDate}
+                        onChange={(e) => setNewStartDate(e.target.value)}
+                        className="w-full bg-neutral-900 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono text-slate-400 uppercase">Ngày kết thúc</label>
+                      <input 
+                        type="date" 
+                        required 
+                        value={newEndDate}
+                        onChange={(e) => setNewEndDate(e.target.value)}
+                        className="w-full bg-neutral-900 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button 
+                      type="submit"
+                      disabled={isActionProcessing === "creating"}
+                      className="bg-amber-600 hover:bg-amber-500 text-white rounded-md px-4 py-2 text-xs font-semibold cursor-pointer disabled:opacity-40 transition-colors flex items-center gap-1.5"
+                    >
+                      {isActionProcessing === "creating" ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                      Lưu chu kỳ nháp
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* BẢNG HIỂN THỊ DANH SÁCH CHU KỲ */}
+              {isLoadingCycles ? (
+                <div className="flex-1 flex items-center justify-center text-slate-400 gap-2">
+                  <Loader2 size={20} className="animate-spin text-amber-500" /> Đang tải danh sách chu kỳ...
+                </div>
+              ) : reviewCycles.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-slate-500 text-xs py-12">
+                  Chưa có chu kỳ đánh giá nào được thiết lập trong Workspace này.
+                </div>
+              ) : (
+                <div className="overflow-x-auto w-full border border-white/5 rounded-xl bg-black/20">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-white/10 bg-white/[0.02] text-slate-400 font-mono uppercase tracking-wider">
+                        <th className="p-4 font-semibold">Tên chu kỳ</th>
+                        <th className="p-4 font-semibold">Thời gian bắt đầu</th>
+                        <th className="p-4 font-semibold">Thời gian kết thúc</th>
+                        <th className="p-4 font-semibold text-center">Trạng thái</th>
+                        <th className="p-4 font-semibold text-right">Thao tác kích hoạt</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 text-slate-300">
+                      {reviewCycles.map((cycle) => {
+                        const cId = cycle.reviewCycleId || cycle.id;
+                        const cycleName = cycle.name || "Chu kỳ đánh giá";
+                        const startDate = cycle.startDate ? new Date(cycle.startDate).toLocaleDateString("vi-VN") : "---";
+                        const endDate = cycle.endDate ? new Date(cycle.endDate).toLocaleDateString("vi-VN") : "---";
+                        const status = cycle.status || "Draft";
+
+                        return (
+                          <tr key={cId} className="hover:bg-white/[0.01] transition-colors">
+                            <td className="p-4 font-bold text-white text-sm">{cycleName}</td>
+                            <td className="p-4 text-slate-400 font-mono">{startDate}</td>
+                            <td className="p-4 text-slate-400 font-mono">{endDate}</td>
+                            <td className="p-4 text-center">
+                              {status === "Active" ? (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">Active</span>
+                              ) : status === "Completed" ? (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Completed</span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-500/10 text-zinc-400 border border-zinc-500/20">Draft</span>
+                              )}
+                            </td>
+                            <td className="p-4 text-right">
+                              {isWorkspaceOwner && (
+                                <div className="flex items-center justify-end gap-2">
+                                  {status === "Draft" && (
+                                    <button
+                                      type="button"
+                                      disabled={isActionProcessing !== null}
+                                      onClick={() => handleStartReviewCycle(cId)}
+                                      className="inline-flex items-center gap-1 bg-sky-600 hover:bg-sky-500 text-white px-2.5 py-1.5 rounded-md text-xs font-semibold cursor-pointer disabled:opacity-40 transition-colors"
+                                    >
+                                      {isActionProcessing === cId ? <Loader2 size={12} className="animate-spin" /> : <PlayCircle size={12} />}
+                                      Start Cycle
+                                    </button>
+                                  )}
+                                  
+                                  {status === "Active" && (
+                                    <button
+                                      type="button"
+                                      disabled={isActionProcessing !== null}
+                                      onClick={() => handleCompleteReviewCycle(cId)}
+                                      className="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1.5 rounded-md text-xs font-semibold cursor-pointer disabled:opacity-40 transition-colors"
+                                    >
+                                      {isActionProcessing === cId ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                                      Complete
+                                    </button>
+                                  )}
+
+                                  {status === "Completed" && (
+                                    <span className="text-[11px] text-slate-500 font-mono italic">No actions</span>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL 1: TẠO DỰ ÁN MỚI */}
       {workspaceIdParam && (
@@ -813,6 +1163,7 @@ export default function ActiveProjects() {
               </div>
               <div className="flex items-center gap-3">
                 {/* Tích hợp nút mời trực tiếp ngay tại Header bảng quản lý */}
+                {isWorkspaceOwner && (
                 <button
                   type="button"
                   onClick={() => setIsInviteModalOpen(true)}
@@ -820,6 +1171,7 @@ export default function ActiveProjects() {
                 >
                   <UserPlus size={12} /> Mời thành viên
                 </button>
+                )}
                 <button onClick={() => setIsMemberModalOpen(false)} className="text-slate-500 hover:text-white cursor-pointer">
                   <X size={20} />
                 </button>
@@ -897,6 +1249,7 @@ export default function ActiveProjects() {
                                   )}
                                 </td>
                                 <td className="p-4 text-right">
+                                  {isWorkspaceOwner && (
                                   <button
                                     type="button"
                                     disabled={statusUpdatingId === mId}
@@ -919,6 +1272,7 @@ export default function ActiveProjects() {
                                       </>
                                     )}
                                   </button>
+                                  )}
                                 </td>
                               </tr>
                             );

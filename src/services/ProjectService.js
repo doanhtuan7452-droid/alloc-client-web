@@ -6,6 +6,7 @@ const ProjectService = {
   getProjectById: (id) => axiosClient.get(`/projects/${id}`),
   updateProject: (id, data) => axiosClient.put(`/projects/${id}`, data),
   deleteProject: (id) => axiosClient.delete(`/projects/${id}`),
+  getProjectProgress: (id) => axiosClient.get(`/projects/${id}/progress`),
   getProjectTasks: (id) => axiosClient.get(`/projects/${id}/tasks`),
   createProjectTask: (projectId, data) =>
     axiosClient.post(`/projects/${projectId}/tasks`, data),
@@ -23,19 +24,26 @@ const ProjectService = {
   createRisk: (projectId, data) =>
     axiosClient.post(`/projects/${projectId}/risks`, data),
   getProjectAIInsights: (id) => axiosClient.get(`/projects/${id}/ai-insights`),
+  createRiskMitigation: (riskId, data) =>
+  axiosClient.post(`/risks/${riskId}/mitigations`, data),
+
+  getRiskLifecycle: (riskId) =>
+    axiosClient.get(`/risks/${riskId}/lifecycle`),
   getFinancialSummary: async (projectId) => {
     const [expensesRes, revenuesRes] = await Promise.all([
       axiosClient.get(`/projects/${projectId}/expenses`, {
-        params: { pageNumber: 1, pageSize: 1000 },
+        // Sửa pageSize từ 1000 thành 100
+        params: { pageNumber: 1, pageSize: 100 }, 
       }),
       axiosClient.get(`/projects/${projectId}/revenues`, {
-        params: { pageNumber: 1, pageSize: 1000 },
+        // Sửa pageSize từ 1000 thành 100
+        params: { pageNumber: 1, pageSize: 100 }, 
       }),
     ]);
 
     const expenses = expensesRes.items || [];
     const revenues = revenuesRes.items || [];
-
+    
     return {
       totalSpent: expenses.reduce(
         (sum, item) => sum + Number(item.amount || 0),
@@ -47,6 +55,7 @@ const ProjectService = {
       ),
     };
   },
+  
   createProject: (workspaceId, data) =>
     axiosClient.post(`/workspaces/${workspaceId}/projects`, data),
 };

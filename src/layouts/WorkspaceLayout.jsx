@@ -3,10 +3,12 @@ import { Outlet, useSearchParams, useNavigate, useOutletContext } from "react-ro
 import { LayoutGrid } from "lucide-react";
 import ProjectService from "../services/ProjectService";
 import WorkspaceService from "../services/WorkspaceService";
+import { useUser } from "../contexts/UserContext";
 
 export default function WorkspaceLayout() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { switchWorkspace, currentUser } = useUser();
   
   const parentContext = useOutletContext() || [];
   const searchQuery = parentContext[0] || "";
@@ -22,6 +24,12 @@ export default function WorkspaceLayout() {
   const [refreshTrigger, setRefreshTrigger] = useState(0); 
 
   const workspaceId = workspaceIdParam && workspaceIdParam !== "undefined" ? workspaceIdParam : "";
+
+  useEffect(() => {
+    if (workspaceId && currentUser) {
+        switchWorkspace(Number(workspaceId));
+    }
+  }, [workspaceId, currentUser]);
 
   useEffect(() => {
     if (!workspaceId) {

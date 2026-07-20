@@ -35,7 +35,10 @@ export default function Conversations() {
   const isCreatingParam = searchParams.get("isCreating");
   const workspaceIdParam = searchParams.get("workspaceId");
 
-  const { currentUser, loading } = useUser();
+
+
+  const { currentUser, currentWorkspaceRole, switchWorkspace } = useUser();
+  const isWorkspaceOwner = currentWorkspaceRole?.roleName?.toLowerCase() === "owner";
 
   // 1. ĐƯA TẤT CẢ STATE LÊN TRÊN CÙNG ĐỂ TRÁNH LỖI HOISTING/HOOKS
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(null);
@@ -76,6 +79,7 @@ export default function Conversations() {
     return me?.workspaceMemberId ?? null;
   }, [currentUser, workspaceMembersList]);
 
+
   // 3. THEO DÕI TRẠNG THÁI MẠNG (ĐẢM BẢO CÓ DẤU ; RÕ RÀNG)
   useEffect(() => {
     const goOnline = () => setIsOnline(true);
@@ -96,13 +100,7 @@ export default function Conversations() {
 
     const wId = parseInt(workspaceIdParam);
     setActiveWorkspaceId(wId);
-
-    if (isCreatingParam === "true") {
-      setIsCreateModalOpen(true);
-    } else {
-      setIsCreateModalOpen(false);
-    }
-
+    switchWorkspace(wId);
     const loadData = async () => {
       try {
         const res = await fetchWorkspaceConversations(wId);
@@ -135,7 +133,7 @@ export default function Conversations() {
       fetchConversationMessages(activeConversation.conversationId)
         .then((res) => {
           const msgs = res.data?.items || res.data || res || [];
-          setMessagesList(msgs.reverse());
+          setMessagesList(msgs);
           return markConversationAsRead(activeConversation.conversationId);
         })
         .then(() => {
@@ -235,8 +233,20 @@ export default function Conversations() {
         contentToSend,
         assetsToSend
       );
+      
+      // Lấy dữ liệu tin nhắn trả về từ server
       const savedMsg = res.data || res;
-      setMessagesList((prev) => [...prev, savedMsg]);
+      
+      // Đảm bảo gán đủ thông tin định danh của chính bạn nếu API không trả về thông tin sender
+      const completeMsg = {
+        ...savedMsg,
+        senderId: currentUser?.id || savedMsg.senderId,
+        senderName: currentUser?.profile?.fullName || savedMsg.senderName,
+        senderAvatarUrl: currentUser?.profile?.avatarUrl || savedMsg.senderAvatarUrl
+      };
+
+      // Push tin nhắn mới vào dưới cùng danh sách
+      setMessagesList((prev) => [...prev, completeMsg]);
     } catch (err) {
       console.error("Lỗi gửi tin nhắn:", err);
     }
@@ -328,13 +338,15 @@ export default function Conversations() {
               <Sparkles size={16} className="text-blue-400 animate-pulse" />
               Conversations
             </h1>
-            <button
-              onClick={handleOpenCreateModal}
-              className="p-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-slate-400 hover:text-white transition-all cursor-pointer"
-              title="Tạo cuộc hội thoại mới"
-            >
-              <Plus size={16} />
-            </button>
+            {isWorkspaceOwner && (
+              <button
+                onClick={handleOpenCreateModal}
+                className="p-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-slate-400 hover:text-white transition-all cursor-pointer"
+                title="Tạo cuộc hội thoại mới"
+              >
+                <Plus size={16} />
+              </button>
+            )}
           </div>
 
           <div className="relative">
@@ -375,6 +387,18 @@ export default function Conversations() {
           ) : (
             filteredConversations.map((conv) => {
               const isSelected = activeConversation?.conversationId === conv.conversationId;
+
+              // TÌM AVATAR: Nếu là chat 1-1 (Direct), tìm thành viên trong danh sách không phải là mình
+              let displayAvatar = null;
+              if (conv.type === "Direct") {
+                // Nếu API có mảng các thành viên của phòng chat (ví dụ conv.workspaceMembers), hãy tìm người kia.
+                // Nếu không có, ta dò trong danh sách tin nhắn của phòng này xem có ai trùng tên hoặc dùng tạm memberId
+                const otherMember = workspaceMembersList.find(
+                  (m) => (m.resource?.fullName === conv.name || m.fullName === conv.name) && m.resource?.avatarUrl
+                );
+                displayAvatar = otherMember?.resource?.avatarUrl;
+              }
+
               return (
                 <div
                   key={conv.conversationId}
@@ -386,8 +410,9 @@ export default function Conversations() {
                   }`}
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
+                    {/* ĐOẠN HIỂN THỊ AVATAR CẦN THAY THẾ */}
                     <div
-                      className={`w-9 h-9 rounded-xl border flex items-center justify-center font-bold text-sm shrink-0 transition-all ${
+                      className={`w-9 h-9 rounded-xl border flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden transition-all ${
                         isSelected
                           ? "bg-blue-500/20 border-blue-400/30 text-blue-400"
                           : "bg-white/[0.02] border-white/5 text-slate-400 group-hover:border-white/10"
@@ -395,6 +420,12 @@ export default function Conversations() {
                     >
                       {conv.type === "Project_Channel" ? (
                         <Hash size={16} />
+                      ) : displayAvatar ? (
+                        <img 
+                          src={displayAvatar} 
+                          alt={conv.name} 
+                          className="w-full h-full object-cover"
+                        />
                       ) : (
                         (conv.name || "C").substring(0, 2).toUpperCase()
                       )}
@@ -483,8 +514,13 @@ export default function Conversations() {
                 </div>
               ) : (
                 messagesList.map((msg) => {
-                  // Đổi check cứng 99 thành biến động myMemberId từ Context
-                  const isMe = msg.workspaceMemberId === myMemberId || msg.isMe === true;
+                  // 🌟 SỬA TẠI ĐÂY: So sánh senderId từ API với ID của chính bạn từ UserContext
+                  // Hoặc so sánh tên senderName nếu hệ thống của bạn map theo tên
+                  const isMe = 
+                    msg.senderId === currentUser?.id || 
+                    msg.senderId === currentUser?.accountId || 
+                    msg.senderName === currentUser?.profile?.fullName; 
+
                   const isEditingThis = editingMessageId === msg.messageId;
 
                   return (
@@ -492,22 +528,45 @@ export default function Conversations() {
                       key={msg.messageId}
                       className={`flex gap-3 group max-w-2xl ${isMe ? "ml-auto flex-row-reverse" : "mr-auto"}`}
                     >
-                      <div className="w-7 h-7 rounded-xl bg-zinc-800 border border-white/5 flex items-center justify-center font-bold text-xs text-slate-400 shrink-0 shadow-inner">
-                        {(msg.senderName || "U").substring(0, 2).toUpperCase()}
-                      </div>
+                      {/* Avatar của người gửi */}
+                      {msg.senderAvatarUrl ? (
+                        <img 
+                          src={msg.senderAvatarUrl} 
+                          alt={msg.senderName} 
+                          className="w-7 h-7 rounded-xl object-cover shrink-0 border border-white/5 shadow-inner"
+                        />
+                      ) : (
+                        <div className="w-7 h-7 rounded-xl bg-zinc-800 border border-white/5 flex items-center justify-center font-bold text-xs text-slate-400 shrink-0 shadow-inner">
+                          {(msg.senderName || "U").substring(0, 2).toUpperCase()}
+                        </div>
+                      )}
 
                       <div className="space-y-1 flex flex-col">
-                        <div className={`flex items-center gap-2 text-[10px] font-mono text-slate-500 ${isMe ? "justify-end" : ""}`}>
-                          <span className="font-bold text-slate-400">{msg.senderName || "User"}</span>
-                          <span>{new Date(msg.sentAt || Date.now()).toLocaleTimeString()}</span>
-                          {msg.isEdited && <span className="text-blue-500/70 text-[9px]">(đã sửa)</span>}
-                        </div>
+                        {/* Tên người gửi và thời gian hiển thị */}
+                          <div className={`flex items-center gap-2 text-[10px] font-mono text-slate-500 ${isMe ? "justify-end" : ""}`}>
+                            <span className="font-bold text-slate-400">{msg.senderName || "User"}</span>
+                            
+                            {/* 🌟 SỬA ĐOẠN HIỂN THỊ THỜI GIAN TẠI ĐÂY */}
+                            <span>
+                              {new Date(msg.createdAt || msg.sentAt || Date.now()).toLocaleString("vi-VN", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                day: "2-digit",
+                                month: "2-digit",
+                                year: "numeric",
+                                hour12: false // Sử dụng định dạng 24h kiểu Việt Nam (VD: 13:20 thay vì 1:20 PM)
+                              }).replace(/,/g, " -")} 
+                            </span>
 
+                            {msg.isEdited && <span className="text-blue-500/70 text-[9px]">(đã sửa)</span>}
+                          </div>
+
+                        {/* Nội dung bong bóng chat */}
                         <div
                           className={`p-3 rounded-2xl text-xs relative ${
                             isMe
-                              ? "bg-blue-600 text-white rounded-tr-none shadow-md shadow-blue-900/10"
-                              : "bg-[#18181B] border border-white/5 text-slate-200 rounded-tl-none shadow-sm"
+                              ? "bg-blue-600 text-white rounded-tr-none shadow-md shadow-blue-900/10" // Của mình: Nền xanh, bo góc phải
+                              : "bg-[#18181B] border border-white/5 text-slate-200 rounded-tl-none shadow-sm" // Người khác: Nền tối, bo góc trái
                           }`}
                         >
                           {isEditingThis ? (
@@ -519,32 +578,19 @@ export default function Conversations() {
                                 className="w-full bg-black/30 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none"
                               />
                               <div className="flex justify-end gap-1.5 text-[10px] font-mono">
-                                <button
-                                  onClick={() => setEditingMessageId(null)}
-                                  className="px-2 py-0.5 hover:text-white text-slate-400"
-                                >
-                                  Hủy
-                                </button>
-                                <button
-                                  onClick={() => handleSaveEditMessage(msg.messageId)}
-                                  className="px-2 py-0.5 bg-white text-black rounded font-medium"
-                                >
-                                  Lưu
-                                </button>
+                                <button onClick={() => setEditingMessageId(null)} className="px-2 py-0.5 hover:text-white text-slate-400">Hủy</button>
+                                <button onClick={() => handleSaveEditMessage(msg.messageId)} className="px-2 py-0.5 bg-white text-black rounded font-medium">Lưu</button>
                               </div>
                             </div>
                           ) : (
                             <p className="leading-relaxed whitespace-pre-wrap break-all">{msg.content}</p>
                           )}
 
-                          {/* Render tệp đính kèm */}
+                          {/* Render file đính kèm nếu có */}
                           {msg.assets && msg.assets.length > 0 && (
                             <div className="mt-2 pt-2 border-t border-white/10 space-y-1.5 min-w-[180px]">
                               {msg.assets.map((asset) => (
-                                <div
-                                  key={asset.assetId}
-                                  className="flex items-center gap-2 p-1.5 rounded bg-black/20 border border-white/5 text-[11px] font-mono text-slate-300"
-                                >
+                                <div key={asset.assetId} className="flex items-center gap-2 p-1.5 rounded bg-black/20 border border-white/5 text-[11px] font-mono text-slate-300">
                                   {asset.fileType === "Image" ? <Image size={12} /> : <FileText size={12} />}
                                   <span className="truncate flex-1">{asset.fileName}</span>
                                 </div>
@@ -552,21 +598,13 @@ export default function Conversations() {
                             </div>
                           )}
 
-                          {/* Actions khi Hover chuột */}
+                          {/* Nút hành động sửa/xoá khi hover chuột dành riêng cho tin nhắn của bạn */}
                           {isMe && !isEditingThis && (
                             <div className="absolute top-1/2 -translate-y-1/2 -left-12 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-[#141416] border border-white/10 p-1 rounded-lg shadow-xl">
-                              <button
-                                onClick={() => startEditMessage(msg)}
-                                className="p-1 hover:bg-white/5 text-slate-400 hover:text-white rounded"
-                                title="Chỉnh sửa"
-                              >
+                              <button onClick={() => startEditMessage(msg)} className="p-1 hover:bg-white/5 text-slate-400 hover:text-white rounded" title="Chỉnh sửa">
                                 <Edit2 size={11} />
                               </button>
-                              <button
-                                onClick={() => handleDeleteMessage(msg.messageId)}
-                                className="p-1 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 rounded"
-                                title="Thu hồi"
-                              >
+                              <button onClick={() => handleDeleteMessage(msg.messageId)} className="p-1 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 rounded" title="Thu hồi">
                                 <Trash2 size={11} />
                               </button>
                             </div>

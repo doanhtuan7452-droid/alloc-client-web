@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AuthService from "../../services/AuthService";
+import { useUser } from "../../contexts/UserContext";
 
 const LoginEmail = () => {
   const [email, setEmail] = useState("");
@@ -9,6 +10,7 @@ const LoginEmail = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const { fetchCurrentUser } = useUser();
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -17,13 +19,14 @@ const LoginEmail = () => {
 
     try {
       await AuthService.login({ email, password });
+      
+      // 🌟 Lấy thông tin user mới ngay lập tức để đồng bộ Context trước khi chuyển trang
+      await fetchCurrentUser(); 
+      
       navigate("/workspaces", { replace: true });
     } catch (loginError) {
       const errorMsg = loginError.message || "";
-      
-      // Bắt từ khóa trong thông báo lỗi từ Backend trả về
       if (errorMsg.includes("chưa được xác thực") || errorMsg.includes("OTP")) {
-        // Chuyển sang trang verify-otp nằm bên trong cụm /login
         navigate("/login/verify-otp", { 
           state: { email, fromLogin: true } 
         });

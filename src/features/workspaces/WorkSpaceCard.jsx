@@ -23,7 +23,7 @@ export default function WorkspaceCard({ workspace, projects = [], onWorkspaceCli
           </p>
         </div>
 
-        <div className="text-right">
+        <div className="text-right mr-9">
           <span className="text-xs font-mono text-zinc-400 bg-zinc-800/80 px-2.5 py-1 rounded-full border border-white/5 flex items-center gap-1.5">
             <FolderGit2 className="w-3.5 h-3.5 text-blue-400" />
             {projects.length} Dự án

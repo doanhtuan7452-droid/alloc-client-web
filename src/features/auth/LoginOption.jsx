@@ -1,23 +1,28 @@
 import { useNavigate } from 'react-router-dom';
-import { GoogleLogin } from '@react-oauth/google'; // Import component này
+import { GoogleLogin } from '@react-oauth/google';
 import { useState } from 'react';
 import AuthService from '../../services/AuthService';
+import { saveAuthTokens } from '../../utils/authTokens'; 
+import { useUser } from '../../contexts/UserContext';
 
 const LoginOption = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const { fetchCurrentUser } = useUser(); // 🌟 Lấy hàm fetchCurrentUser
 
     const handleGoogleSuccess = async (credentialResponse) => {
         setLoading(true);
         setError("");
         try {
-            // credentialResponse.credential chính là idToken chuẩn mã hóa JWT
             const idToken = credentialResponse.credential; 
-
-            // Gửi lên backend
-            await AuthService.registerGoogle({ idToken });
+            const response = await AuthService.registerGoogle({ idToken });
             
+            const tokenData = response?.data ? response.data : response;
+            saveAuthTokens(tokenData);
+            
+            await fetchCurrentUser();
+
             navigate('/workspaces', { replace: true });
         } catch (err) {
             setError(err.message || "Đăng nhập bằng Google thất bại.");
@@ -46,15 +51,14 @@ const LoginOption = () => {
                     <GoogleLogin
                         onSuccess={handleGoogleSuccess}
                         onError={() => setError("Đăng nhập Google thất bại.")}
-                        theme="filled_blue"  // Chuyển nền sang màu xanh dương chuẩn Google
-                        shape="circle"       // Bo tròn tối đa (dạng viên thuốc)
-                        width="290px"        // Chỉnh chiều rộng vừa với nút Gmail bên dưới
-                        locale="vi"          // Chuyển chữ bên trong thành tiếng Việt
-                        text="signin_with"   // Hiển thị chữ "Đăng nhập bằng Google"
+                        theme="filled_blue"
+                        shape="circle"
+                        width="290px"
+                        locale="vi"
+                        text="signin_with"
                     />
                 </div>
 
-                {/* Nút Gmail giữ nguyên */}
                 <button
                     className="w-full flex items-center justify-center py-3 px-5 text-base font-medium bg-[#ea4335]/90 text-white rounded-xl transition-all duration-200 hover:bg-[#ea4335] shadow-lg active:scale-[0.98]"
                     onClick={handleGmailLogin}
