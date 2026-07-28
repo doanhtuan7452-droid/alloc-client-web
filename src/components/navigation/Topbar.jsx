@@ -1,22 +1,54 @@
-import { useLocation, Link } from "react-router-dom";
-import { Search } from "lucide-react";
+import { useLocation } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { Search, Sparkles } from "lucide-react";
 import logoAlloc from "../../assets/images/logo_alloc_267x329.png";
 import FilledBellIcon from "../icons/filled-bell-icon";
-import ProfileDropdown from "./ProfileDropdown";
+import NotificationsPopup from "./NotificationsPopup";
+import NotificationService from "../../services/NotificationService";
+import { useLanguage } from "../../contexts/LanguageContext";
 
-export default function Topbar({ searchQuery, setSearchQuery }) {
+export default function Topbar({ searchQuery, setSearchQuery, isAiChatOpen, onToggleAiChat }) {
+  const { t } = useLanguage();
   const location = useLocation();
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const bellButtonRef = useRef(null);
 
+  const fetchUnreadCount = async () => {
+    try {
+      const countRes = await NotificationService.getUnreadCount();
+      const count = typeof countRes === "number" 
+        ? countRes 
+        : (countRes?.unreadCount !== undefined ? countRes.unreadCount : (countRes?.count || 0));
+      setUnreadCount(count);
+    } catch (error) {
+      console.error(t("notifications.fetchCountError"), error);
+    }
+  };
+
+  useEffect(() => {
+    fetchUnreadCount();
+
+    const handleNewNotification = () => {
+      fetchUnreadCount();
+    };
+
+    window.addEventListener("new-notification", handleNewNotification);
+    return () => {
+      window.removeEventListener("new-notification", handleNewNotification);
+    };
+  }, []);
+ 
   const isWorkspacesList =
     location.pathname === "/workspaces" || location.pathname === "/workspaces/";
   const isWorkspaceBoard =
     location.pathname === "/workspaces/board" ||
     location.pathname === "/workspaces/board/";
-
+ 
   const showSearchBar = isWorkspacesList || isWorkspaceBoard;
   const placeholderText = isWorkspacesList
-    ? "Search projects..."
-    : "Tìm mã hoặc tên công việc...";
+    ? t("topbar.searchProjects")
+    : t("topbar.searchTasks");
 
   return (
     // Đồng bộ hiệu ứng glassmorphism với Outlet
@@ -54,15 +86,42 @@ export default function Topbar({ searchQuery, setSearchQuery }) {
       )}
 
       {/* Khu vực góc phải tinh chỉnh lại kích thước tỉ lệ */}
-      <div className="flex items-center gap-4">
-        <Link
-          to="/notifications"
-          className="relative text-content-secondary hover:text-content-primary transition-colors flex items-center justify-center"
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onToggleAiChat}
+          className={`px-2.5 py-1.5 rounded-lg border text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 ${
+            isAiChatOpen
+              ? "bg-purple-600 border-purple-400 text-white shadow-[0_0_15px_rgba(168,85,247,0.4)]"
+              : "bg-purple-600/20 hover:bg-purple-600/30 border-purple-500/30 text-purple-300 hover:text-white"
+          }`}
+          title={t("topbar.toggleAi")}
         >
-          <FilledBellIcon size={16} color="currentColor" />
-          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-cyan-400 rounded-full border border-header"></span>
-        </Link>
-        <ProfileDropdown />
+          <Sparkles className="w-3.5 h-3.5 text-purple-300 animate-pulse" />
+          <span className="hidden sm:inline">{t("topbar.allocAi")}</span>
+        </button>
+
+        <button
+          ref={bellButtonRef}
+          onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+          className="relative text-content-secondary hover:text-content-primary transition-colors flex items-center justify-center p-1.5 rounded-lg hover:bg-white/5 cursor-pointer"
+          title={t("topbar.notifications")}
+        >
+          <span className={`flex items-center justify-center ${unreadCount > 0 ? "animate-bellShake" : ""}`}>
+            <FilledBellIcon size={16} color="currentColor" />
+          </span>
+          {unreadCount > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[16px] h-4 px-1 text-[9px] font-extrabold text-white bg-rose-500 rounded-full border border-zinc-950 shadow-md">
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </span>
+          )}
+        </button>
+
+        <NotificationsPopup
+          isOpen={isNotificationOpen}
+          onClose={() => setIsNotificationOpen(false)}
+          buttonRef={bellButtonRef}
+          onUnreadCountChange={setUnreadCount}
+        />
       </div>
     </header>
   );

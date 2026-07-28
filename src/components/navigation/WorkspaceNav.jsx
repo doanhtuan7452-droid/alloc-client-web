@@ -1,6 +1,8 @@
 import { NavLink, useSearchParams } from 'react-router-dom';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 export default function WorkspaceNav() {
+  const { t } = useLanguage();
   const [searchParams] = useSearchParams();
   const workspaceId = searchParams.get("workspaceId");
   const projectId = searchParams.get("projectId");
@@ -23,25 +25,22 @@ export default function WorkspaceNav() {
   return (
     <div className="flex items-center gap-6 text-sm font-medium mt-3 -mb-[1px] border-b border-transparent shrink-0">
       <NavLink to={`/workspaces/board${queryStr}`} className={getTabClass}>
-        Board
+        {t("workspaceNav.board")}
       </NavLink>
       <NavLink to={`/workspaces/gantt${queryStr}`} className={getTabClass}>
-        Gantt
+        {t("workspaceNav.gantt")}
       </NavLink>
       <NavLink to={`/workspaces/calendar${queryStr}`} className={getTabClass}>
-        Calendar
+        {t("workspaceNav.calendar")}
       </NavLink>
       <NavLink to={`/workspaces/list${queryStr}`} className={getTabClass}>
-        List
+        {t("workspaceNav.list")}
       </NavLink>
       <NavLink to={`/workspaces/finance${queryStr}`} className={getTabClass}>
-        Finance
-      </NavLink>
-      <NavLink to={`/workspaces/members${queryStr}`} className={getTabClass}>
-        Members
+        {t("workspaceNav.finance")}
       </NavLink>
       <NavLink to={`/workspaces/risks${queryStr}`} className={getTabClass}>
-        Risks
+        {t("workspaceNav.risks")}
       </NavLink>
     </div>
   );

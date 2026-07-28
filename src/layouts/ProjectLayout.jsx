@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
-import { Outlet, useSearchParams, useLocation, useOutletContext } from "react-router-dom";
+import { Outlet, useSearchParams, useLocation, useOutletContext, Link } from "react-router-dom";
 import { Filter, Calendar, ChevronDown, Download, Plus } from "lucide-react";
 import ProjectService from "../services/ProjectService";
 import WorkspaceNav from "../components/navigation/WorkspaceNav";
+import { useLanguage } from "../contexts/LanguageContext";
 
 export default function ProjectLayout() {
+  const { t } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   
@@ -103,11 +105,25 @@ export default function ProjectLayout() {
         <div className="w-full flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-3">
           <div>
             <div className="flex items-center gap-2 text-xs font-mono text-slate-400 mb-2">
-              <span>WORKSPACES</span>
+              <Link to="/workspaces" className="hover:text-blue-400 transition-colors">
+                {t("projectList.title")}
+              </Link>
               <span>›</span>
-              <span className="uppercase">{workspaceInfo ? workspaceInfo.name : "..."}</span>
+              {workspaceInfo ? (
+                <Link to={`/workspaces/active?workspaceId=${workspaceId}`} className="hover:text-blue-400 transition-colors uppercase">
+                  {workspaceInfo.name}
+                </Link>
+              ) : (
+                <span className="uppercase">...</span>
+              )}
               <span>›</span>
-              <span className="text-blue-400 uppercase">{activeProject ? activeProject.projectName : "..."}</span>
+              {activeProject ? (
+                <Link to={`/workspaces/board?workspaceId=${workspaceId}&projectId=${activeProject.projectId}`} className="text-blue-400 hover:text-blue-300 transition-colors uppercase font-medium">
+                  {activeProject.projectName}
+                </Link>
+              ) : (
+                <span className="text-blue-400 uppercase">...</span>
+              )}
             </div>
             
             <div className="flex items-center gap-4 flex-wrap">
@@ -116,10 +132,10 @@ export default function ProjectLayout() {
                   onClick={() => setIsProjectDropdownOpen(!isProjectDropdownOpen)}
                   className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] text-white rounded-md text-sm font-semibold transition-all cursor-pointer shadow-md"
                 >
-                  <span className="max-w-[200px] truncate">{activeProject ? activeProject.projectName : "Chọn dự án..."}</span>
+                  <span className="max-w-[200px] truncate">{activeProject ? activeProject.projectName : t("projectList.selectProject")}</span>
                   <ChevronDown className="w-4 h-4 text-slate-400" />
                 </button>
-
+ 
                 {isProjectDropdownOpen && (
                   <>
                     <div className="fixed inset-0 z-10" onClick={() => setIsProjectDropdownOpen(false)}></div>
@@ -144,7 +160,7 @@ export default function ProjectLayout() {
                   </>
                 )}
               </div>
-
+ 
               {activeProject && (
                 <div className="flex items-center gap-2">
                   {!isFinanceTab && activeProject.methodology && (
@@ -159,23 +175,23 @@ export default function ProjectLayout() {
               )}
             </div>
           </div>
-
+ 
           <div className="flex items-center gap-3">
             {isFinanceTab ? (
               <>
                 <button className="flex items-center gap-2 px-4 py-2 border border-white/10 rounded-md bg-white/5 hover:bg-white/10 text-sm text-slate-300 transition-all cursor-pointer">
-                  <Download className="w-4 h-4" /> Export Report
+                  <Download className="w-4 h-4" /> {t("projectList.exportReport")}
                 </button>
                 <button 
                   onClick={() => setIsExpenseModalOpen(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-500 transition-all cursor-pointer shadow-[0_0_15px_rgba(59,130,246,0.3)]"
                 >
-                  <Plus className="w-4 h-4" /> Log Expense
+                  <Plus className="w-4 h-4" /> {t("projectList.logExpense")}
                 </button>
               </>
             ) : (
               <button className="flex items-center gap-2 px-4 py-2 border border-white/10 rounded-md bg-white/5 hover:bg-white/10 text-sm text-slate-300 transition-all cursor-pointer">
-                <Filter className="w-4 h-4" /> Lọc
+                <Filter className="w-4 h-4" /> {t("projectList.filter")}
               </button>
             )}
           </div>

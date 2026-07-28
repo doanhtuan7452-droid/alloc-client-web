@@ -1,11 +1,35 @@
 import axiosClient from "../utils/axiosClient";
 
+const mapNotification = (notif) => {
+  if (!notif) return notif;
+  return {
+    notificationId: notif.notificationID !== undefined ? notif.notificationID : notif.notificationId,
+    type: notif.notificationType || notif.type,
+    title: notif.title,
+    content: notif.message || notif.content,
+    isRead: notif.isRead,
+    createdAt: notif.createdAt,
+    referenceId: notif.referenceID !== undefined ? notif.referenceID : notif.referenceId,
+    referenceType: notif.referenceType,
+    referenceData: notif.referenceData
+  };
+};
+
 const NotificationService = {
-  getNotifications: async (pageNumber = 1, pageSize = 50) => {
+  getNotifications: async (page = 1, pageSize = 50) => {
     try {
       const response = await axiosClient.get("/notifications", { 
-        params: { pageNumber, pageSize } 
+        params: { page, pageSize } 
       });
+      if (response && response.items) {
+        return {
+          ...response,
+          items: response.items.map(mapNotification)
+        };
+      }
+      if (Array.isArray(response)) {
+        return response.map(mapNotification);
+      }
       return response;
     } catch (error) {
       console.error("Lỗi lấy danh sách thông báo:", error);
@@ -16,10 +40,10 @@ const NotificationService = {
   getUnreadCount: async () => {
     try {
       const response = await axiosClient.get("/notifications/unread-count");
-      return response; // Thường trả về số lượng hoặc object { count: X }
+      return response; // Trả về object { unreadCount: X }
     } catch (error) {
       console.error("Lỗi lấy số lượng thông báo chưa đọc:", error);
-      return 0;
+      return { unreadCount: 0 };
     }
   },
 

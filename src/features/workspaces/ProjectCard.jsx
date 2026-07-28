@@ -2,10 +2,14 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { MoreVertical, Calendar, Landmark, Layers, Edit2, Trash2, X, Loader2, ChevronDown } from "lucide-react";
 import ProjectService from "../../services/ProjectService";
+import { useNotification } from "../../contexts/NotificationContext";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 // 🌟 Thêm prop isOwner nhận từ file cha truyền xuống
 export default function ProjectCard({ project, onMenuClick, isOwner }) {
+  const { t, locale } = useLanguage();
   const navigate = useNavigate();
+  const { toast, confirm } = useNotification();
   const [searchParams] = useSearchParams();
   const {
     projectId,
@@ -60,7 +64,7 @@ export default function ProjectCard({ project, onMenuClick, isOwner }) {
   const handleUpdateProject = async (e) => {
     e.preventDefault();
     if (!editName.trim()) {
-      setFormError("Vui lòng nhập tên dự án");
+      setFormError(t("activeProjects.errEmptyProjectName"));
       return;
     }
 
@@ -97,7 +101,7 @@ export default function ProjectCard({ project, onMenuClick, isOwner }) {
       // Hiển thị chi tiết lỗi từ validation của backend nếu có
       setFormError(err?.response?.data?.errors 
         ? JSON.stringify(err.response.data.errors) 
-        : (err?.response?.data?.message || "Có lỗi xảy ra khi cập nhật thông tin dự án."));
+        : (err?.response?.data?.message || t("activeProjects.errUpdateProject")));
     } finally {
       setIsSubmitting(false);
     }
@@ -107,7 +111,11 @@ export default function ProjectCard({ project, onMenuClick, isOwner }) {
   const handleDeleteProject = async (e) => {
     e.stopPropagation(); // Ngăn hành vi click thẻ card mở trang board
     
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa dự án "${projectName}" không? Hành động này không thể hoàn tác.`)) {
+    const isConfirmed = await confirm(
+      t("activeProjects.confirmDeleteProject").replace("{name}", projectName),
+      t("activeProjects.deleteProjectTitle")
+    );
+    if (!isConfirmed) {
       return;
     }
 
@@ -122,7 +130,7 @@ export default function ProjectCard({ project, onMenuClick, isOwner }) {
       }
     } catch (err) {
       console.error("Error deleting project:", err);
-      alert(err?.response?.data?.message || "Có lỗi xảy ra khi xóa dự án.");
+      toast.error(err?.response?.data?.message || t("activeProjects.errDeleteProject"));
     }
   };
 
@@ -148,7 +156,7 @@ export default function ProjectCard({ project, onMenuClick, isOwner }) {
     if (!dateString) return "...";
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return dateString;
-    return d.toLocaleDateString("vi-VN");
+    return d.toLocaleDateString(locale === "vi" ? "vi-VN" : "en-US");
   };
 
   const today = new Date();
@@ -218,7 +226,7 @@ export default function ProjectCard({ project, onMenuClick, isOwner }) {
                     }}
                     className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-white/5 hover:text-white flex items-center gap-2 transition-colors cursor-pointer"
                   >
-                    <Edit2 size={12} className="text-blue-400" /> Chỉnh sửa dự án
+                    <Edit2 size={12} className="text-blue-400" /> {t("activeProjects.editProject")}
                   </button>
                   
                   {/* 🌟 Nút Xóa mới thêm */}
@@ -227,7 +235,7 @@ export default function ProjectCard({ project, onMenuClick, isOwner }) {
                     onClick={handleDeleteProject}
                     className="w-full text-left px-3 py-2 text-xs text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 flex items-center gap-2 transition-colors cursor-pointer"
                   >
-                    <Trash2 size={12} className="text-rose-400" /> Xóa dự án
+                    <Trash2 size={12} className="text-rose-400" /> {t("activeProjects.deleteProject")}
                   </button>
                 </div>
               )}
@@ -251,7 +259,7 @@ export default function ProjectCard({ project, onMenuClick, isOwner }) {
           <div className="border-t border-white/5 pt-3 space-y-2.5">
             <div className="flex justify-between text-xs">
               <span className="text-slate-400 flex items-center gap-1.5">
-                <Landmark className="w-3.5 h-3.5 text-slate-500" /> Expected Budget
+                <Landmark className="w-3.5 h-3.5 text-slate-500" /> {t("activeProjects.expectedBudget")}
               </span>
               <span className="font-mono text-emerald-400 font-medium text-right">
                 {formatCurrency(expectedBudget, originalCurrencyCode)}
@@ -265,7 +273,7 @@ export default function ProjectCard({ project, onMenuClick, isOwner }) {
             
             <div className="flex justify-between text-xs">
               <span className="text-slate-400 flex items-center gap-1.5">
-                <Landmark className="w-3.5 h-3.5 text-slate-500" /> Total Revenue
+                <Landmark className="w-3.5 h-3.5 text-slate-500" /> {t("activeProjects.totalRevenue")}
               </span>
               <span className="font-mono text-cyan-400 font-medium text-right">
                 {formatCurrency(totalRevenue, originalCurrencyCode)}
@@ -282,7 +290,7 @@ export default function ProjectCard({ project, onMenuClick, isOwner }) {
           <div className="border-t border-white/5 pt-3 space-y-2.5">
             <div className="flex justify-between text-xs items-center">
               <span className="text-slate-400 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-slate-500" /> Timeline
+                <Calendar className="w-3.5 h-3.5 text-slate-500" /> {t("activeProjects.timeline")}
               </span>
               <span className="font-mono text-slate-300 text-[10px]">
                 {formatDateDisplay(startDate)} / {formatDateDisplay(endDate)}
@@ -291,7 +299,7 @@ export default function ProjectCard({ project, onMenuClick, isOwner }) {
 
             <div>
               <div className="flex justify-between items-center text-xs mb-1.5">
-                <span className="text-slate-400">Completion Progress</span>
+                <span className="text-slate-400">{t("activeProjects.completionProgress")}</span>
                 <span className="font-mono font-medium text-slate-200">
                   {completionPercent}%
                 </span>
@@ -309,11 +317,11 @@ export default function ProjectCard({ project, onMenuClick, isOwner }) {
             
             {status !== "Completed" && status !== "Cancelled" && (
               <div className="text-[9px] font-mono flex justify-between">
-                <span className="text-slate-500">Time Status</span>
+                <span className="text-slate-500">{t("activeProjects.timeStatus")}</span>
                 {isOverdue ? (
-                  <span className="text-rose-400 font-bold uppercase">Overdue by {Math.abs(daysLeft)} days</span>
+                  <span className="text-rose-400 font-bold uppercase">{t("activeProjects.overdueDays").replace("{days}", Math.abs(daysLeft))}</span>
                 ) : (
-                  <span className="text-sky-400/80">{daysLeft} days remaining</span>
+                  <span className="text-sky-400/80">{t("activeProjects.daysRemaining").replace("{days}", daysLeft)}</span>
                 )}
               </div>
             )}
@@ -321,7 +329,7 @@ export default function ProjectCard({ project, onMenuClick, isOwner }) {
         </div>
         
         <div className="text-[9px] font-mono text-slate-600 mt-4 text-right">
-          Created on {new Date(createdAt).toLocaleDateString("vi-VN")}
+          {t("activeProjects.createdOn").replace("{date}", new Date(createdAt).toLocaleDateString(locale === "vi" ? "vi-VN" : "en-US"))}
         </div>
       </div>
 
@@ -341,7 +349,7 @@ export default function ProjectCard({ project, onMenuClick, isOwner }) {
             {/* Header Form */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/[0.01]">
               <h3 className="text-xs font-mono font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                <Edit2 size={14} className="text-blue-400" /> Edit Project details
+                <Edit2 size={14} className="text-blue-400" /> {t("activeProjects.editProjectDetails")}
               </h3>
               <button 
                 type="button"
@@ -362,7 +370,7 @@ export default function ProjectCard({ project, onMenuClick, isOwner }) {
 
               {/* ID dự án (Read-only) */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Project ID</label>
+                <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">{t("activeProjects.projectId")}</label>
                 <input
                   type="text"
                   value={`#PROJ-${projectId}`}
@@ -373,21 +381,21 @@ export default function ProjectCard({ project, onMenuClick, isOwner }) {
 
               {/* Tên dự án */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Project Name</label>
+                <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">{t("activeProjects.projectName")}</label>
                 <input
                   type="text"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   className="w-full px-3 py-2 text-sm bg-white/[0.04] border border-white/10 rounded-md text-white focus:outline-none focus:border-blue-500/80 transition-all"
                   disabled={isSubmitting}
-                  placeholder="Nhập tên dự án..."
+                  placeholder={t("activeProjects.projectName") + "..."}
                 />
               </div>
 
               {/* Dropdowns row */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Status</label>
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">{t("activeProjects.status")}</label>
                   <div className="relative">
                     <select
                       value={editStatus}
@@ -406,7 +414,7 @@ export default function ProjectCard({ project, onMenuClick, isOwner }) {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Methodology</label>
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">{t("activeProjects.methodology")}</label>
                   <div className="relative">
                     <select
                       value={editMethodology}
@@ -426,7 +434,7 @@ export default function ProjectCard({ project, onMenuClick, isOwner }) {
 
               {/* Ngân sách */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Expected Budget ({originalCurrencyCode})</label>
+                <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">{t("activeProjects.expectedBudgetCurrency").replace("{currency}", originalCurrencyCode)}</label>
                 <input
                   type="number"
                   value={editBudget}
@@ -439,18 +447,18 @@ export default function ProjectCard({ project, onMenuClick, isOwner }) {
               {/* Lịch trình Dates */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Start Date</label>
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">{t("activeProjects.startDate")}</label>
                   <input
-                    type="date"
-                    value={editStartDate}
-                    onChange={(e) => setEditStartDate(e.target.value)}
-                    className="w-full px-3 py-2 text-sm font-mono bg-white/[0.04] border border-white/10 rounded-md text-slate-300 focus:outline-none focus:border-blue-500/80 transition-colors"
-                    disabled={isSubmitting}
+                     type="date"
+                     value={editStartDate}
+                     onChange={(e) => setEditStartDate(e.target.value)}
+                     className="w-full px-3 py-2 text-sm font-mono bg-white/[0.04] border border-white/10 rounded-md text-slate-300 focus:outline-none focus:border-blue-500/80 transition-colors"
+                     disabled={isSubmitting}
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">End Date</label>
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">{t("activeProjects.endDate")}</label>
                   <input
                     type="date"
                     value={editEndDate}
@@ -469,7 +477,7 @@ export default function ProjectCard({ project, onMenuClick, isOwner }) {
                   className="px-4 py-2 text-xs font-mono uppercase tracking-wider text-slate-400 hover:text-white transition-colors cursor-pointer"
                   disabled={isSubmitting}
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
                 <button
                   type="submit"
@@ -478,10 +486,10 @@ export default function ProjectCard({ project, onMenuClick, isOwner }) {
                 >
                   {isSubmitting ? (
                     <>
-                      <Loader2 size={14} className="animate-spin" /> Saving...
+                      <Loader2 size={14} className="animate-spin" /> {t("activeProjects.saving")}
                     </>
                   ) : (
-                    "Save Changes"
+                    t("activeProjects.saveChanges")
                   )}
                 </button>
               </div>

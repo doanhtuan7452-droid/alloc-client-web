@@ -4,8 +4,11 @@ import { LayoutGrid } from "lucide-react";
 import ProjectService from "../services/ProjectService";
 import WorkspaceService from "../services/WorkspaceService";
 import { useUser } from "../contexts/UserContext";
+import { useLanguage } from "../contexts/LanguageContext";
+import WorkspaceLayoutSkeleton from "../components/skeletons/WorkspaceLayoutSkeleton";
 
 export default function WorkspaceLayout() {
+  const { t } = useLanguage();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { switchWorkspace, currentUser } = useUser();
@@ -33,7 +36,7 @@ export default function WorkspaceLayout() {
 
   useEffect(() => {
     if (!workspaceId) {
-      setError("Không tìm thấy mã không gian làm việc (workspaceId).");
+      setError(t("workspaceList.errNoWorkspaceId"));
       setIsLoading(false);
       return;
     }
@@ -58,7 +61,7 @@ export default function WorkspaceLayout() {
       } catch (err) {
         if (isSubscribed) {
           console.error("Error loading workspace projects:", err);
-          setError("Bạn không có quyền truy cập hoặc workspace này không tồn tại.");
+          setError(t("workspaceList.errNoAccess"));
         }
       } finally {
         if (isSubscribed) setIsLoading(false);
@@ -89,27 +92,23 @@ export default function WorkspaceLayout() {
           <LayoutGrid className="w-8 h-8" />
         </div>
         <div className="space-y-1">
-          <h2 className="text-xl font-bold text-white">Truy cập không hợp lệ</h2>
+          <h2 className="text-xl font-bold text-white">{t("workspaceList.invalidAccess")}</h2>
           <p className="text-sm text-slate-400 max-w-sm">
-            {error || "Vui lòng chọn một không gian làm việc cụ thể để xem dữ liệu."}
+            {error || t("workspaceList.selectWorkspaceMsg")}
           </p>
         </div>
         <button 
           onClick={() => navigate("/workspaces")}
           className="mt-2 px-4 py-2 bg-white/10 hover:bg-white/15 border border-white/10 rounded-md text-xs font-semibold transition-all cursor-pointer"
         >
-          Quay lại danh sách Workspace
+          {t("workspaceList.backToWorkspaceList")}
         </button>
       </div>
     );
   }
 
   if (isLoading) {
-    return (
-      <div className="absolute inset-0 flex items-center justify-center bg-[#0C0C0E]">
-        <p className="text-sm text-slate-400 font-mono">Đang tải dữ liệu không gian...</p>
-      </div>
-    );
+    return <WorkspaceLayoutSkeleton />;
   }
 
   // Giữ nguyên CSS gốc lớp ngoài cùng để không lệch giao diện hay đen màn hình

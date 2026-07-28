@@ -25,6 +25,11 @@ const ReviewCycleService = {
   // POST /api/v1/workspaces/{workspaceId}/review-cycles/{cycleId}/evaluations
   submitEvaluation: (workspaceId, cycleId, data) =>
     axiosClient.post(`/workspaces/${workspaceId}/review-cycles/${cycleId}/evaluations`, data),
+
+  // Lấy danh sách đánh giá của chu kỳ
+  // GET /api/v1/workspaces/{workspaceId}/review-cycles/{cycleId}/evaluations
+  getEvaluations: (workspaceId, cycleId) =>
+    axiosClient.get(`/workspaces/${workspaceId}/review-cycles/${cycleId}/evaluations`),
 };
 
 export default ReviewCycleService;

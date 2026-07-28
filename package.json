@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
+    "@microsoft/signalr": "^10.0.0",
     "@react-oauth/google": "^0.13.5",
     "axios": "^1.18.1",
     "clsx": "^2.1.1",
@@ -18,7 +19,9 @@
     "motion": "^12.40.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "react-is": "^19.2.8",
     "react-router-dom": "^7.15.1",
+    "recharts": "^3.10.1",
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {

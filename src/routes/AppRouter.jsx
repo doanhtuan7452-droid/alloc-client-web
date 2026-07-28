@@ -7,20 +7,22 @@ import LoginEmail from "../features/auth/LoginEmail";
 import ActiveProjects from "../pages/workspaces/ActiveProjects";
 import Board from "../pages/workspaces/Board";
 import Gantt from "../pages/workspaces/Gantt";
+import List from "../pages/workspaces/List";
+import Calendar from "../pages/workspaces/Calendar";
 import Finance from "../pages/workspaces/Finance";
-import Team from "../pages/members/Team";
 import Conversations from "../pages/conversations/Conversations";
 import WorkspaceLayout from "../layouts/WorkspaceLayout";
 import ProjectLayout from "../layouts/ProjectLayout"; // Import file mới tạo
 import Risks from "../pages/workspaces/Risks";
-import Timesheets from "../pages/timesheets/TimeSheets";
+import Timesheets from "../pages/timesheets/Timesheets";
 import Register from "../features/auth/Register";
 import ForgotPassword from "../features/auth/ForgotPassword";
 import VerifyOTP from "../features/auth/VerifyOTP";
 import Profile from "../pages/profile/Profile";
-import Notifications from "../pages/notifications/Notifications";
-import AIInsights from "../pages/ai/AIInsights";
+
+import AIChatPage from "../pages/ai/AIChatPage";
 import WorkspaceListPage from "../pages/workspaces/WorkspaceListPage";
+import HRManagement from "../pages/hr/HRManagement";
 
 export default function AppRouter() {
   return (
@@ -45,12 +47,14 @@ export default function AppRouter() {
             
             <Route element={<WorkspaceLayout />}>
               <Route path="active" element={<ActiveProjects />} /> 
+              <Route path="hr" element={<HRManagement />} /> 
               <Route element={<ProjectLayout />}>
                 <Route path="board" element={<Board />} />
                 <Route path="gantt" element={<Gantt />} />
+                <Route path="list" element={<List />} />
+                <Route path="calendar" element={<Calendar />} />
                 <Route path="finance" element={<Finance />} />
                 <Route path="risks" element={<Risks />} />
-                <Route path="members" element={<Team />} />
               </Route>
             </Route>
           </Route>
@@ -58,8 +62,7 @@ export default function AppRouter() {
           <Route path="timesheets" element={<Timesheets />} />
           <Route path="profile" element={<Profile />} />
           <Route path="conversations" element={<Conversations />} />
-          <Route path="notifications" element={<Notifications />} />
-          <Route path="ai-insights" element={<AIInsights />} />
+          <Route path="ai-chat" element={<AIChatPage />} />
           <Route
             path="*"
             element={

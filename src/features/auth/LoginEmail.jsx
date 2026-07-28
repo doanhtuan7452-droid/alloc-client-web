@@ -2,8 +2,10 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AuthService from "../../services/AuthService";
 import { useUser } from "../../contexts/UserContext";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 const LoginEmail = () => {
+  const { t } = useLanguage();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -31,7 +33,7 @@ const LoginEmail = () => {
           state: { email, fromLogin: true } 
         });
       } else {
-        setError(errorMsg || "Đăng nhập thất bại.");
+        setError(errorMsg || t("auth.login.loginFailed"));
       }
     } finally {
       setLoading(false);
@@ -62,14 +64,14 @@ const LoginEmail = () => {
             d="M15 19l-7-7 7-7"
           />
         </svg>
-        Quay lại
+        {t("auth.login.backBtn")}
       </button>
 
       {/* Tăng margin-bottom từ mb-8 lên mb-10 để nhãn Email có không gian trượt lên */}
       <div className="text-center mb-10">
-        <h2 className="text-2xl font-semibold tracking-wide mb-2">Đăng Nhập</h2>
+        <h2 className="text-2xl font-semibold tracking-wide mb-2">{t("auth.login.title")}</h2>
         <p className="text-gray-400 text-sm">
-          Nhập thông tin tài khoản của bạn
+          {t("auth.login.subTitle")}
         </p>
       </div>
 
@@ -89,7 +91,7 @@ const LoginEmail = () => {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-transparent focus:placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-0 focus:bg-white/10 transition-all duration-300 peer"
-            placeholder="ví dụ: name@gmail.com"
+            placeholder={t("auth.login.emailPlaceholder")}
             required
           />
           <label
@@ -97,7 +99,7 @@ const LoginEmail = () => {
             /* Đã xóa nền kính. Khi trượt lên sẽ nằm ở -top-6 và lùi nhẹ về left-1 */
             className="absolute transition-all duration-300 pointer-events-none -top-6 left-1 text-sm text-gray-400 peer-placeholder-shown:top-3.5 peer-placeholder-shown:left-4 peer-placeholder-shown:text-base peer-focus:-top-6 peer-focus:left-1 peer-focus:text-sm peer-focus:text-blue-400"
           >
-            Email
+            {t("auth.login.emailLabel")}
           </label>
         </div>
 
@@ -109,7 +111,7 @@ const LoginEmail = () => {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 pr-12 text-white placeholder-transparent focus:border-blue-500 focus:outline-none focus:ring-0 focus:bg-white/10 transition-all duration-300 peer"
-            placeholder="Mật khẩu"
+            placeholder={t("auth.login.passwordPlaceholder")}
             required
           />
           <label
@@ -117,7 +119,7 @@ const LoginEmail = () => {
             /* Tương tự nhãn Email, trượt lơ lửng bên trên khung */
             className="absolute transition-all duration-300 pointer-events-none -top-6 left-1 text-sm text-gray-400 peer-placeholder-shown:top-3.5 peer-placeholder-shown:left-4 peer-placeholder-shown:text-base peer-focus:-top-6 peer-focus:left-1 peer-focus:text-sm peer-focus:text-blue-400"
           >
-            Mật khẩu
+            {t("auth.login.passwordLabel")}
           </label>
 
           {/* Nút Toggle Ẩn/Hiện Mật Khẩu */}
@@ -169,9 +171,10 @@ const LoginEmail = () => {
         <div className="flex justify-end mt-[-16px]">
           <a
             href="#"
+            onClick={(e) => { e.preventDefault(); navigate("/forgot-password"); }}
             className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
           >
-            Quên mật khẩu?
+            {t("auth.login.forgotPass")}
           </a>
         </div>
 
@@ -181,19 +184,19 @@ const LoginEmail = () => {
           disabled={loading}
           className="mt-2 w-full py-3 px-5 text-base font-medium bg-blue-500 text-white rounded-xl transition-all duration-200 hover:bg-blue-600 shadow-lg shadow-blue-500/30 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {loading ? "Đang đăng nhập..." : "Đăng Nhập"}
+          {loading ? t("auth.login.loggingIn") : t("auth.login.loginBtn")}
         </button>
       </form>
 
       {/* Dòng điều hướng Đăng ký */}
       <div className="mt-6 text-center text-sm text-gray-400">
-        Chưa có tài khoản?{" "}
+        {t("auth.login.noAccount")}{" "}
         <button
           type="button"
           onClick={() => navigate("/register")}
           className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
         >
-          Tạo tài khoản
+          {t("auth.login.signUpNow")}
         </button>
       </div>
     </div>

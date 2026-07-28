@@ -9,8 +9,14 @@ const WorkspaceService = {
   getWorkspaceProjects: (id) => axiosClient.get(`/workspaces/${id}/Projects`),
   getWorkspaceMembers: (id) => axiosClient.get(`/workspaces/${id}/Members`),
   getWorkspaceRoles: (id) => axiosClient.get(`/workspaces/${id}/Roles`),
-  updateMemberStatus: (workspaceId, memberId) => 
-  axiosClient.put(`/workspaces/${workspaceId}/members/${memberId}/status`),
+  updateMemberStatus: (workspaceId, memberId, data) => 
+    axiosClient.put(`/workspaces/${workspaceId}/members/${memberId}/status`, data),
+  updateMemberRole: (workspaceId, memberId, data) => 
+    axiosClient.put(`/workspaces/${workspaceId}/members/${memberId}/role`, data),
+  updateMemberSalaryOT: (workspaceId, memberId, data) => 
+    axiosClient.put(`/workspaces/${workspaceId}/members/${memberId}/salary-ot`, data),
+  getMemberSalaryOT: (workspaceId, memberId) => 
+    axiosClient.get(`/workspaces/${workspaceId}/members/${memberId}/salary-ot`),
   inviteWorkspaceMember: (workspaceId, memberData) => 
     axiosClient.post(`/workspaces/${workspaceId}/members`, memberData),
   getMemberProfile: (workspaceId, memberId) =>

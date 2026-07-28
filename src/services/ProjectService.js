@@ -7,7 +7,8 @@ const ProjectService = {
   updateProject: (id, data) => axiosClient.put(`/projects/${id}`, data),
   deleteProject: (id) => axiosClient.delete(`/projects/${id}`),
   getProjectProgress: (id) => axiosClient.get(`/projects/${id}/progress`),
-  getProjectTasks: (id) => axiosClient.get(`/projects/${id}/tasks`),
+  getProjectTasks: (id, params = {}) =>
+    axiosClient.get(`/projects/${id}/tasks`, { params }),
   createProjectTask: (projectId, data) =>
     axiosClient.post(`/projects/${projectId}/tasks`, data),
   updateTask: (taskId, data) => axiosClient.put(`/tasks/${taskId}`, data),
@@ -23,21 +24,20 @@ const ProjectService = {
   getRisks: (id) => axiosClient.get(`/projects/${id}/risks`),
   createRisk: (projectId, data) =>
     axiosClient.post(`/projects/${projectId}/risks`, data),
-  getProjectAIInsights: (id) => axiosClient.get(`/projects/${id}/ai-insights`),
   createRiskMitigation: (riskId, data) =>
   axiosClient.post(`/risks/${riskId}/mitigations`, data),
 
   getRiskLifecycle: (riskId) =>
     axiosClient.get(`/risks/${riskId}/lifecycle`),
+  updateRisk: (riskId, data) =>
+    axiosClient.put(`/risks/${riskId}`, data),
   getFinancialSummary: async (projectId) => {
     const [expensesRes, revenuesRes] = await Promise.all([
       axiosClient.get(`/projects/${projectId}/expenses`, {
-        // Sửa pageSize từ 1000 thành 100
-        params: { pageNumber: 1, pageSize: 100 }, 
+        params: { page: 1, pageSize: 100 }, 
       }),
       axiosClient.get(`/projects/${projectId}/revenues`, {
-        // Sửa pageSize từ 1000 thành 100
-        params: { pageNumber: 1, pageSize: 100 }, 
+        params: { page: 1, pageSize: 100 }, 
       }),
     ]);
 

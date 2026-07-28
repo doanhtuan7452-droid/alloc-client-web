@@ -5,11 +5,11 @@ export default function BoardColumn({ id, title, count, dotColor, ActionIcon, on
   return (
     <div className="bg-white/[0.03] rounded-xl border border-white/10 flex flex-col max-h-[80vh]">
       {/* Header */}
-      <div className="p-4 border-b border-white/10 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-2">
-          {dotColor && <div className={`w-2 h-2 rounded-full ${dotColor}`}></div>}
-          <h3 className="font-bold text-lg text-white">{title}</h3>
-          <span className="bg-white/10 border border-white/5 text-slate-300 text-xs px-2 py-0.5 rounded-full">
+      <div className="p-3 sm:p-4 border-b border-white/10 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {dotColor && <div className={`w-2 h-2 rounded-full ${dotColor} shrink-0`}></div>}
+          <h3 className="font-bold text-lg text-white whitespace-nowrap truncate">{title}</h3>
+          <span className="bg-white/10 border border-white/5 text-slate-300 text-xs px-2 py-0.5 rounded-full shrink-0">
             {count}
           </span>
         </div>

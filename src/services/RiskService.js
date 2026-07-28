@@ -8,6 +8,7 @@ const RiskService = {
   createMitigation: (riskId, data) =>
     axiosClient.post(`/risks/${riskId}/mitigations`, data),
   getLifecycle: (riskId) => axiosClient.get(`/risks/${riskId}/lifecycle`),
+  updateRisk: (riskId, data) => axiosClient.put(`/risks/${riskId}`, data),
 };
 
 export default RiskService;

@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useUser } from "../../contexts/UserContext";
+import { useNotification } from "../../contexts/NotificationContext";
+import { useLanguage } from "../../contexts/LanguageContext";
+import { useSignalR } from "../../contexts/SignalRContext";
+import ConversationsSkeleton from "../../components/skeletons/ConversationsSkeleton";
 import {
   Search,
   Plus,
@@ -28,24 +32,35 @@ import {
   deleteConversationMessage,
   createConversation,
   fetchWorkspaceMembers,
+  fetchConversationDetails,
+  addConversationMembers,
+  removeConversationMember,
 } from "../../services/conversationApi";
 
 export default function Conversations() {
+  const { t, locale } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
   const isCreatingParam = searchParams.get("isCreating");
   const workspaceIdParam = searchParams.get("workspaceId");
 
-
-
   const { currentUser, currentWorkspaceRole, switchWorkspace } = useUser();
+  const { toast, confirm } = useNotification();
+  const { conversationConnection, isConversationConnected } = useSignalR();
   const isWorkspaceOwner = currentWorkspaceRole?.roleName?.toLowerCase() === "owner";
 
   // 1. ĐƯA TẤT CẢ STATE LÊN TRÊN CÙNG ĐỂ TRÁNH LỖI HOISTING/HOOKS
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(null);
   const [conversationsList, setConversationsList] = useState([]);
   const [activeConversation, setActiveConversation] = useState(null);
+  const [activeConversationDetails, setActiveConversationDetails] = useState(null);
   const [messagesList, setMessagesList] = useState([]);
   const [workspaceMembersList, setWorkspaceMembersList] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Modal Quản lý Thành viên
+  const [isManageMembersModalOpen, setIsManageMembersModalOpen] = useState(false);
+  const [selectedNewMembers, setSelectedNewMembers] = useState([]);
+  const [isAddingMembers, setIsAddingMembers] = useState(false);
 
   // UI States
   const [inputText, setInputText] = useState("");
@@ -65,6 +80,11 @@ export default function Conversations() {
   const [editText, setEditText] = useState("");
 
   const messagesEndRef = useRef(null);
+  const activeConversationIdRef = useRef(null);
+
+  useEffect(() => {
+    activeConversationIdRef.current = activeConversation?.conversationId;
+  }, [activeConversation]);
 
   const myAccountId = currentUser?.accountId;
 
@@ -102,6 +122,7 @@ export default function Conversations() {
     setActiveWorkspaceId(wId);
     switchWorkspace(wId);
     const loadData = async () => {
+      setIsLoading(true);
       try {
         const res = await fetchWorkspaceConversations(wId);
         const list = res?.data || res || []; 
@@ -121,13 +142,25 @@ export default function Conversations() {
       } catch (err) {
         console.error("Lỗi khi tải thành viên workspace:", err);
         setWorkspaceMembersList([]);
+      } finally {
+        setIsLoading(false);
       }
     };
 
     loadData();
   }, [workspaceIdParam, isCreatingParam]);
 
-  // Tải lịch sử tin nhắn khi chọn phòng hội thoại
+  const loadConversationDetails = async (id) => {
+    try {
+      const res = await fetchConversationDetails(id);
+      const details = res.data || res;
+      setActiveConversationDetails(details);
+    } catch (err) {
+      console.error("Lỗi khi tải chi tiết cuộc hội thoại:", err);
+    }
+  };
+
+  // Tải lịch sử tin nhắn và chi tiết cuộc hội thoại khi chọn phòng hội thoại
   useEffect(() => {
     if (activeConversation?.conversationId) {
       fetchConversationMessages(activeConversation.conversationId)
@@ -144,10 +177,154 @@ export default function Conversations() {
           );
         })
         .catch((err) => console.error("Lỗi nạp tin nhắn:", err));
+
+      loadConversationDetails(activeConversation.conversationId);
     } else {
       setMessagesList([]);
+      setActiveConversationDetails(null);
     }
   }, [activeConversation]);
+
+  // Tích hợp kết nối/ngắt kết nối phòng chat qua SignalR
+  useEffect(() => {
+    if (!conversationConnection || !isConversationConnected) return;
+
+    const joinRoom = async () => {
+      if (activeConversation?.conversationId) {
+        try {
+          await conversationConnection.invoke("JoinConversation", activeConversation.conversationId);
+          console.log(`[SignalR] Joined conversation room: ${activeConversation.conversationId}`);
+        } catch (err) {
+          console.error("[SignalR] Failed to join conversation room:", err);
+        }
+      }
+    };
+
+    joinRoom();
+
+    return () => {
+      if (activeConversation?.conversationId && conversationConnection.state === "Connected") {
+        conversationConnection.invoke("LeaveConversation", activeConversation.conversationId)
+          .catch(err => console.error("[SignalR] Failed to leave conversation room:", err));
+      }
+    };
+  }, [activeConversation, conversationConnection, isConversationConnected]);
+
+  // Tự động rejoin phòng chat khi SignalR tự kết nối lại
+  useEffect(() => {
+    if (!conversationConnection) return;
+
+    const handleReconnected = () => {
+      const activeId = activeConversationIdRef.current;
+      if (activeId) {
+        console.log("[SignalR] Reconnected. Rejoining room:", activeId);
+        conversationConnection.invoke("JoinConversation", activeId)
+          .catch(err => console.error("[SignalR] Failed to rejoin conversation room:", err));
+      }
+    };
+
+    conversationConnection.onreconnected?.(handleReconnected);
+    
+    return () => {
+      // Sử dụng ref giúp loại bỏ việc đăng ký trùng lặp nhiều lần khi activeConversation thay đổi
+    };
+  }, [conversationConnection]);
+
+  // Lắng nghe các sự kiện của ConversationHub gửi xuống
+  useEffect(() => {
+    if (!conversationConnection) return;
+
+    const handleMessageCreated = (message) => {
+      console.log("[SignalR] MessageCreated received:", message);
+      if (activeConversation && message.conversationId === activeConversation.conversationId) {
+        setMessagesList((prev) => {
+          if (prev.some((m) => m.messageId === message.messageId)) return prev;
+          return [...prev, message];
+        });
+        
+        markConversationAsRead(activeConversation.conversationId).catch(console.error);
+      }
+
+      setConversationsList((prev) =>
+        prev.map((c) => {
+          if (c.conversationId === message.conversationId) {
+            const isCurrent = activeConversation && c.conversationId === activeConversation.conversationId;
+            const isMe = message.senderId === myMemberId || message.senderName === currentUser?.profile?.fullName;
+            return {
+              ...c,
+              lastMessageContent: message.content || (message.assets && message.assets.length > 0 ? t("conversations.attachTooltip") : ""),
+              lastMessageAt: message.createdAt,
+              unreadCount: (isCurrent || isMe) ? c.unreadCount : c.unreadCount + 1,
+            };
+          }
+          return c;
+        })
+      );
+    };
+
+    const handleMessageEdited = (message) => {
+      console.log("[SignalR] MessageEdited received:", message);
+      if (activeConversation && message.conversationId === activeConversation.conversationId) {
+        setMessagesList((prev) =>
+          prev.map((m) => (m.messageId === message.messageId ? message : m))
+        );
+      }
+    };
+
+    const handleMessageDeleted = (message) => {
+      console.log("[SignalR] MessageDeleted received:", message);
+      if (activeConversation && message.conversationId === activeConversation.conversationId) {
+        setMessagesList((prev) =>
+          prev.map((m) => (m.messageId === message.messageId ? message : m))
+        );
+      }
+      setConversationsList((prev) =>
+        prev.map((c) => {
+          if (c.conversationId === message.conversationId) {
+            return {
+              ...c,
+              lastMessageContent: message.content,
+            };
+          }
+          return c;
+        })
+      );
+    };
+
+    const handleConversationRead = (payload) => {
+      console.log("[SignalR] ConversationRead received:", payload);
+      if (payload.memberId === myMemberId) {
+        setConversationsList((prev) =>
+          prev.map((c) =>
+            c.conversationId === payload.conversationId ? { ...c, unreadCount: 0 } : c
+          )
+        );
+      }
+    };
+
+    const handleConversationCleared = (payload) => {
+      console.log("[SignalR] ConversationCleared received:", payload);
+      if (activeConversation && activeConversation.conversationId === payload.conversationId) {
+        toast.warning(t("conversations.chatClearedOrDeleted") || "This conversation has been deleted.");
+        setActiveConversation(null);
+      }
+      setConversationsList((prev) => prev.filter((c) => c.conversationId !== payload.conversationId));
+    };
+
+    conversationConnection.on("MessageCreated", handleMessageCreated);
+    conversationConnection.on("MessageEdited", handleMessageEdited);
+    conversationConnection.on("MessageDeleted", handleMessageDeleted);
+    conversationConnection.on("ConversationRead", handleConversationRead);
+    conversationConnection.on("ConversationCleared", handleConversationCleared);
+
+    return () => {
+      conversationConnection.off("MessageCreated", handleMessageCreated);
+      conversationConnection.off("MessageEdited", handleMessageEdited);
+      conversationConnection.off("MessageDeleted", handleMessageDeleted);
+      conversationConnection.off("ConversationRead", handleConversationRead);
+      conversationConnection.off("ConversationCleared", handleConversationCleared);
+    };
+  }, [conversationConnection, activeConversation, myMemberId, currentUser]);
 
   // Reset selected members khi đổi loại chat trong modal
   useEffect(() => {
@@ -215,7 +392,7 @@ export default function Conversations() {
     setSelectedAssets((prev) => [...prev, ...mockAssets]);
   };
 
-  // Gửi tin nhắn mới lên API
+  // Gửi tin nhắn mới lên API (sẽ nhận lại tin qua SignalR MessageCreated)
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!inputText.trim() && selectedAssets.length === 0) return;
@@ -228,27 +405,15 @@ export default function Conversations() {
     setSelectedAssets([]);
 
     try {
-      const res = await sendConversationMessage(
+      await sendConversationMessage(
         activeConversation.conversationId,
         contentToSend,
         assetsToSend
       );
-      
-      // Lấy dữ liệu tin nhắn trả về từ server
-      const savedMsg = res.data || res;
-      
-      // Đảm bảo gán đủ thông tin định danh của chính bạn nếu API không trả về thông tin sender
-      const completeMsg = {
-        ...savedMsg,
-        senderId: currentUser?.id || savedMsg.senderId,
-        senderName: currentUser?.profile?.fullName || savedMsg.senderName,
-        senderAvatarUrl: currentUser?.profile?.avatarUrl || savedMsg.senderAvatarUrl
-      };
-
-      // Push tin nhắn mới vào dưới cùng danh sách
-      setMessagesList((prev) => [...prev, completeMsg]);
+      // Không tự ý push cục bộ, SignalR Hub sẽ đẩy sự kiện MessageCreated để đồng bộ
     } catch (err) {
       console.error("Lỗi gửi tin nhắn:", err);
+      toast.error(t("conversations.errSendFailed") || "Failed to send message.");
     }
   };
 
@@ -257,33 +422,77 @@ export default function Conversations() {
     setEditText(msg.content);
   };
 
-  // Lưu chỉnh sửa tin nhắn
+  // Lưu chỉnh sửa tin nhắn (sẽ nhận lại tin qua SignalR MessageEdited)
   const handleSaveEditMessage = async (msgId) => {
     if (!editText.trim()) return;
     try {
       await editConversationMessage(msgId, editText.trim());
-      setMessagesList((prev) =>
-        prev.map((m) =>
-          m.messageId === msgId ? { ...m, content: editText.trim(), isEdited: true } : m
-        )
-      );
       setEditingMessageId(null);
     } catch (err) {
       console.error(err);
-      alert("Lỗi khi chỉnh sửa tin nhắn.");
+      toast.error(t("conversations.errEditFailed"));
     }
   };
 
-  // Thu hồi tin nhắn
+  // Thu hồi tin nhắn (sẽ nhận lại tin qua SignalR MessageDeleted)
   const handleDeleteMessage = async (msgId) => {
-    if (!window.confirm("Bạn có chắc chắn muốn thu hồi tin nhắn này không?")) return;
+    if (!(await confirm(t("conversations.recallConfirm"), t("conversations.recallConfirmTitle")))) return;
     try {
       await deleteConversationMessage(msgId);
-      setMessagesList((prev) => prev.filter((m) => m.messageId !== msgId));
     } catch (err) {
       console.error(err);
-      alert("Lỗi khi thu hồi tin nhắn.");
+      toast.error(t("conversations.errRecallFailed"));
     }
+  };
+
+  const handleOpenManageMembers = () => {
+    setIsManageMembersModalOpen(true);
+    setSelectedNewMembers([]);
+    setIsAddingMembers(false);
+  };
+
+  // Xóa thành viên khỏi nhóm chat
+  const handleRemoveMember = async (memberId) => {
+    const targetMember = activeConversationDetails?.members?.find(m => m.workspaceMemberId === memberId);
+    const displayName = targetMember?.fullName || `Member ${memberId}`;
+    
+    if (!(await confirm(
+      t("conversations.removeMemberConfirm").replace("{name}", displayName),
+      t("conversations.removeMemberConfirmTitle")
+    ))) return;
+
+    try {
+      await removeConversationMember(activeConversation.conversationId, memberId);
+      toast.success(t("conversations.removeMemberSuccess"));
+      loadConversationDetails(activeConversation.conversationId);
+    } catch (err) {
+      console.error(err);
+      toast.error(t("conversations.errRemoveMemberFailed"));
+    }
+  };
+
+  // Thêm các thành viên được chọn vào nhóm chat
+  const handleAddMembersSubmit = async (e) => {
+    e.preventDefault();
+    if (selectedNewMembers.length === 0) return;
+
+    try {
+      await addConversationMembers(activeConversation.conversationId, selectedNewMembers);
+      toast.success(t("conversations.addMembersSuccess"));
+      setSelectedNewMembers([]);
+      setIsAddingMembers(false);
+      loadConversationDetails(activeConversation.conversationId);
+    } catch (err) {
+      console.error(err);
+      toast.error(t("conversations.errAddMembersFailed"));
+    }
+  };
+
+  const toggleNewMemberSelection = (memberId) => {
+    const idNum = Number(memberId);
+    setSelectedNewMembers((prev) =>
+      prev.includes(idNum) ? prev.filter((id) => id !== idNum) : [...prev, idNum]
+    );
   };
 
   // Xử lý tạo cuộc hội thoại mới khi Submit form Modal
@@ -292,11 +501,11 @@ export default function Conversations() {
     if (!activeWorkspaceId) return;
 
     if (newChatType !== "Direct" && !newChatName.trim()) {
-      alert("Vui lòng nhập tên cuộc hội thoại!");
+      toast.warning(t("conversations.errInputNameRequired"));
       return;
     }
     if (newChatType === "Direct" && selectedMembers.length !== 1) {
-      alert("Hội thoại Direct (1-1) yêu cầu chọn đúng 1 đồng nghiệp!");
+      toast.warning(t("conversations.errSelectOneColleague"));
       return;
     }
 
@@ -321,9 +530,13 @@ export default function Conversations() {
       setSelectedMembers([]);
     } catch (err) {
       console.error(err);
-      alert(err?.response?.data?.message || "Lỗi khi tạo cuộc hội thoại.");
+      toast.error(err?.response?.data?.message || t("conversations.errCreateChatFailed"));
     }
   };
+
+  if (isLoading) {
+    return <ConversationsSkeleton />;
+  }
 
   return (
     <div className="flex h-[calc(100vh-4rem)] w-full bg-[#0B0B0C] text-slate-100 overflow-hidden select-none">
@@ -336,13 +549,13 @@ export default function Conversations() {
           <div className="flex items-center justify-between">
             <h1 className="text-base font-bold tracking-tight bg-gradient-to-r from-slate-100 to-slate-400 bg-clip-text text-transparent flex items-center gap-2">
               <Sparkles size={16} className="text-blue-400 animate-pulse" />
-              Conversations
+              {t("conversations.title")}
             </h1>
             {isWorkspaceOwner && (
               <button
                 onClick={handleOpenCreateModal}
                 className="p-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-slate-400 hover:text-white transition-all cursor-pointer"
-                title="Tạo cuộc hội thoại mới"
+                title={t("conversations.createConversationTooltip")}
               >
                 <Plus size={16} />
               </button>
@@ -353,7 +566,7 @@ export default function Conversations() {
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
             <input
               type="text"
-              placeholder="Tìm kiếm phòng, tin nhắn..."
+              placeholder={t("conversations.searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-[#141416] border border-white/5 rounded-lg pl-9 pr-4 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 font-mono"
@@ -373,7 +586,13 @@ export default function Conversations() {
                   : "border-transparent text-slate-500 hover:text-slate-300"
               }`}
             >
-              {tab === "all" ? "Tất cả" : tab === "direct" ? "1-1" : tab === "groups" ? "Nhóm" : "Kênh"}
+              {tab === "all"
+                ? t("conversations.tabs.all")
+                : tab === "direct"
+                ? t("conversations.tabs.direct")
+                : tab === "groups"
+                ? t("conversations.tabs.groups")
+                : t("conversations.tabs.channels")}
             </button>
           ))}
         </div>
@@ -382,7 +601,7 @@ export default function Conversations() {
         <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
           {filteredConversations.length === 0 ? (
             <div className="text-center py-8 text-xs text-slate-600 font-mono italic">
-              Không tìm thấy cuộc hội thoại nào.
+              {t("conversations.emptyState")}
             </div>
           ) : (
             filteredConversations.map((conv) => {
@@ -434,14 +653,18 @@ export default function Conversations() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2 mb-0.5">
                         <span className="font-medium text-xs truncate text-slate-200">
-                          {conv.name || `Hội thoại Direct #${conv.conversationId}`}
+                          {conv.name || t("conversations.defaultDirectTitle").replace("{id}", conv.conversationId)}
                         </span>
                         <span className="text-[9px] font-mono text-content-muted shrink-0">
-                          {conv.type}
+                          {conv.type === "Project_Channel"
+                            ? t("conversations.tabs.channels")
+                            : conv.type === "Group"
+                            ? t("conversations.tabs.groups")
+                            : t("conversations.tabs.direct")}
                         </span>
                       </div>
                       <p className="text-[11px] text-content-muted truncate font-mono">
-                        {conv.lastMessageContent || "Chưa có tin nhắn thảo luận..."}
+                        {conv.lastMessageContent || t("conversations.noMessagesPlaceholder")}
                       </p>
                     </div>
                   </div>
@@ -490,15 +713,24 @@ export default function Conversations() {
                 </div>
                 <div className="min-w-0">
                   <h2 className="text-xs font-bold text-slate-200 truncate">
-                    {activeConversation.name || `Hội thoại #${activeConversation.conversationId}`}
+                    {activeConversation.name || t("conversations.defaultDirectTitle").replace("{id}", activeConversation.conversationId)}
                   </h2>
                   <p className="text-[10px] text-slate-500 font-mono">
-                    Type: {activeConversation.type} • ID: {activeConversation.conversationId}
+                    Type: {activeConversation.type === "Project_Channel" ? t("conversations.projectChannel") : activeConversation.type === "Group" ? t("conversations.discussionGroup") : t("conversations.colleague")} • ID: {activeConversation.conversationId}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-4 text-xs font-mono text-slate-500">
+                {(activeConversation.type === "Group" || activeConversation.type === "Project_Channel") && (
+                  <button
+                    onClick={handleOpenManageMembers}
+                    className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-slate-300 hover:text-white flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 text-[11px]"
+                  >
+                    <UserCircle size={14} className="text-blue-400" />
+                    {t("conversations.manageMembers")}
+                  </button>
+                )}
                 <span className="flex items-center gap-1 text-slate-400">
                   <Bell size={12} className="text-amber-500" /> Active
                 </span>
@@ -509,8 +741,8 @@ export default function Conversations() {
             <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-4 bg-gradient-to-b from-black/0 via-black/5 to-black/20">
               {messagesList.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-slate-600 space-y-2 font-mono">
-                  <p className="text-xs">Chưa có dữ liệu hội thoại nào ở phòng này.</p>
-                  <p className="text-[10px] text-slate-700">Hãy bắt đầu gửi tin nhắn thảo luận đầu tiên!</p>
+                  <p className="text-xs">{t("conversations.noMessagesInRoom")}</p>
+                  <p className="text-[10px] text-slate-700">{t("conversations.startFirstMessage")}</p>
                 </div>
               ) : (
                 messagesList.map((msg) => {
@@ -548,7 +780,7 @@ export default function Conversations() {
                             
                             {/* 🌟 SỬA ĐOẠN HIỂN THỊ THỜI GIAN TẠI ĐÂY */}
                             <span>
-                              {new Date(msg.createdAt || msg.sentAt || Date.now()).toLocaleString("vi-VN", {
+                              {new Date(msg.createdAt || msg.sentAt || Date.now()).toLocaleString(locale === "vi" ? "vi-VN" : "en-US", {
                                 hour: "2-digit",
                                 minute: "2-digit",
                                 day: "2-digit",
@@ -558,7 +790,7 @@ export default function Conversations() {
                               }).replace(/,/g, " -")} 
                             </span>
 
-                            {msg.isEdited && <span className="text-blue-500/70 text-[9px]">(đã sửa)</span>}
+                            {msg.isEdited && <span className="text-blue-500/70 text-[9px]">({t("common.edited") || "edited"})</span>}
                           </div>
 
                         {/* Nội dung bong bóng chat */}
@@ -578,8 +810,8 @@ export default function Conversations() {
                                 className="w-full bg-black/30 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none"
                               />
                               <div className="flex justify-end gap-1.5 text-[10px] font-mono">
-                                <button onClick={() => setEditingMessageId(null)} className="px-2 py-0.5 hover:text-white text-slate-400">Hủy</button>
-                                <button onClick={() => handleSaveEditMessage(msg.messageId)} className="px-2 py-0.5 bg-white text-black rounded font-medium">Lưu</button>
+                                <button onClick={() => setEditingMessageId(null)} className="px-2 py-0.5 hover:text-white text-slate-400">{t("common.cancel")}</button>
+                                <button onClick={() => handleSaveEditMessage(msg.messageId)} className="px-2 py-0.5 bg-white text-black rounded font-medium">{t("common.save")}</button>
                               </div>
                             </div>
                           ) : (
@@ -588,23 +820,27 @@ export default function Conversations() {
 
                           {/* Render file đính kèm nếu có */}
                           {msg.assets && msg.assets.length > 0 && (
-                            <div className="mt-2 pt-2 border-t border-white/10 space-y-1.5 min-w-[180px]">
-                              {msg.assets.map((asset) => (
-                                <div key={asset.assetId} className="flex items-center gap-2 p-1.5 rounded bg-black/20 border border-white/5 text-[11px] font-mono text-slate-300">
-                                  {asset.fileType === "Image" ? <Image size={12} /> : <FileText size={12} />}
-                                  <span className="truncate flex-1">{asset.fileName}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                             <div className="mt-2 pt-2 border-t border-white/10 space-y-1.5 min-w-[180px]">
+                               {msg.assets.map((asset) => {
+                                 const type = asset.assetType || asset.fileType;
+                                 const name = asset.assetName || asset.fileName;
+                                 return (
+                                   <div key={asset.assetId} className="flex items-center gap-2 p-1.5 rounded bg-black/20 border border-white/5 text-[11px] font-mono text-slate-300">
+                                     {type === "Image" ? <Image size={12} /> : <FileText size={12} />}
+                                     <span className="truncate flex-1">{name}</span>
+                                   </div>
+                                 );
+                               })}
+                             </div>
+                           )}
 
                           {/* Nút hành động sửa/xoá khi hover chuột dành riêng cho tin nhắn của bạn */}
                           {isMe && !isEditingThis && (
                             <div className="absolute top-1/2 -translate-y-1/2 -left-12 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-[#141416] border border-white/10 p-1 rounded-lg shadow-xl">
-                              <button onClick={() => startEditMessage(msg)} className="p-1 hover:bg-white/5 text-slate-400 hover:text-white rounded" title="Chỉnh sửa">
+                              <button onClick={() => startEditMessage(msg)} className="p-1 hover:bg-white/5 text-slate-400 hover:text-white rounded" title={t("common.edit")}>
                                 <Edit2 size={11} />
                               </button>
-                              <button onClick={() => handleDeleteMessage(msg.messageId)} className="p-1 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 rounded" title="Thu hồi">
+                              <button onClick={() => handleDeleteMessage(msg.messageId)} className="p-1 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400 rounded" title={t("conversations.deleteMsg")}>
                                 <Trash2 size={11} />
                               </button>
                             </div>
@@ -641,7 +877,7 @@ export default function Conversations() {
 
               <form onSubmit={handleSendMessage} className="flex items-center gap-2 relative">
                 <div className="flex items-center gap-1 absolute left-3">
-                  <label className="p-1.5 hover:bg-white/5 rounded-lg text-slate-500 hover:text-slate-300 cursor-pointer transition-all">
+                  <label className="p-1.5 hover:bg-white/5 rounded-lg text-slate-500 hover:text-slate-300 cursor-pointer transition-all" title={t("conversations.attachTooltip")}>
                     <Paperclip size={15} />
                     <input type="file" multiple onChange={handleFileChange} className="hidden" />
                   </label>
@@ -655,7 +891,7 @@ export default function Conversations() {
 
                 <input
                   type="text"
-                  placeholder={`Nhắn tin vào phòng #${activeConversation.name || activeConversation.conversationId}...`}
+                  placeholder={`${t("conversations.inputPlaceholder")} #${activeConversation.name || activeConversation.conversationId}...`}
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   className="w-full bg-[#121214] border border-white/5 rounded-xl pl-20 pr-12 py-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-blue-500/50"
@@ -665,6 +901,7 @@ export default function Conversations() {
                   type="submit"
                   disabled={!inputText.trim() && selectedAssets.length === 0}
                   className="absolute right-2.5 p-2 bg-blue-600 rounded-lg text-white hover:bg-blue-500 transition-all disabled:opacity-30 disabled:hover:bg-blue-600 cursor-pointer shadow-md shadow-blue-900/20"
+                  title={t("conversations.sendTooltip")}
                 >
                   <Send size={13} />
                 </button>
@@ -675,8 +912,8 @@ export default function Conversations() {
           <div className="flex-1 flex flex-col items-center justify-center text-slate-600 font-mono space-y-3">
             <UserCircle size={40} className="text-slate-700 stroke-[1.2]" />
             <div className="text-center space-y-1">
-              <p className="text-xs">Chưa chọn phòng hội thoại thảo luận.</p>
-              <p className="text-[10px] text-slate-700">Vui lòng chọn một phòng từ danh sách bên trái để xem tin nhắn.</p>
+              <p className="text-xs">{t("conversations.noActiveChatTitle")}</p>
+              <p className="text-[10px] text-slate-700">{t("conversations.noActiveChatSubText")}</p>
             </div>
           </div>
         )}
@@ -694,7 +931,7 @@ export default function Conversations() {
             </button>
 
             <h2 className="text-sm font-bold text-slate-200 mb-4 font-mono uppercase tracking-wider text-blue-400">
-              Tạo cuộc trò chuyện mới
+              {t("conversations.createModalTitle")}
             </h2>
 
             <form onSubmit={handleCreateChat} className="space-y-4">
@@ -702,7 +939,7 @@ export default function Conversations() {
               {/* Loại cuộc hội thoại */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-mono text-slate-400 uppercase tracking-wide">
-                  Loại trò chuyện
+                  {t("conversations.chatTypeField")}
                 </label>
                 <div className="grid grid-cols-3 gap-2 font-mono text-xs">
                   {["Direct", "Group", "Project_Channel"].map((type) => (
@@ -716,7 +953,11 @@ export default function Conversations() {
                           : "bg-white/[0.02] border-white/5 text-slate-500 hover:text-slate-300"
                       }`}
                     >
-                      {type === "Direct" ? "1-1" : type === "Group" ? "Nhóm" : "Kênh"}
+                      {type === "Direct"
+                        ? t("conversations.tabs.direct")
+                        : type === "Group"
+                        ? t("conversations.tabs.groups")
+                        : t("conversations.tabs.channels")}
                     </button>
                   ))}
                 </div>
@@ -726,12 +967,12 @@ export default function Conversations() {
               {newChatType !== "Direct" && (
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-mono text-slate-400 uppercase tracking-wide">
-                    Tên cuộc hội thoại / Kênh
+                    {t("conversations.chatNameField")}
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="Nhập tên phòng thảo luận..."
+                    placeholder={t("conversations.chatNamePlaceholder")}
                     value={newChatName}
                     onChange={(e) => setNewChatName(e.target.value)}
                     className="w-full bg-[#1A1A1C] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
@@ -742,7 +983,7 @@ export default function Conversations() {
               {/* Danh sách thành viên tham gia hội thoại */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-mono text-slate-400 uppercase tracking-wide">
-                  Mời thành viên ({newChatType === "Direct" ? "Chọn 1 đồng nghiệp" : "Chọn nhiều"})
+                  {t("conversations.selectMembersField")} ({newChatType === "Direct" ? t("conversations.inviteDirectHint") : t("conversations.inviteGroupHint")})
                 </label>
                 <div className="space-y-2 max-h-44 overflow-y-auto custom-scrollbar pr-1">
                   {workspaceMembersList && workspaceMembersList
@@ -783,7 +1024,7 @@ export default function Conversations() {
                 </div>
                 {newChatType === "Direct" && (
                   <p className="text-[10px] text-content-muted font-mono mt-1">
-                    * Đã chọn {selectedMembers.length} / 1 đồng nghiệp.
+                    {t("conversations.selectedCountHint").replace("{count}", selectedMembers.length)}
                   </p>
                 )}
               </div>
@@ -795,16 +1036,175 @@ export default function Conversations() {
                   onClick={() => setIsCreateModalOpen(false)}
                   className="px-4 py-2 border border-white/10 rounded-md bg-white/5 text-slate-350 hover:bg-white/10 hover:text-white text-sm font-medium transition-all cursor-pointer"
                 >
-                  Hủy bỏ
+                  {t("common.cancel")}
                 </button>
                 <button
                   type="submit"
                   className="px-5 py-2 rounded-md bg-slate-200 hover:bg-white text-neutral-950 text-sm font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-white/5 cursor-pointer animate-none"
                 >
-                  Tạo cuộc hội thoại
+                  {t("conversations.createChatBtn")}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: QUẢN LÝ THÀNH VIÊN HỘI THOẠI */}
+      {isManageMembersModalOpen && activeConversationDetails && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-[#141416]/95 border border-white/10 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+            <button
+              onClick={() => setIsManageMembersModalOpen(false)}
+              className="absolute right-4 top-4 text-slate-500 hover:text-white transition-colors cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
+            <h2 className="text-sm font-bold text-slate-200 mb-4 font-mono uppercase tracking-wider text-blue-400">
+              {t("conversations.manageMembers")}
+            </h2>
+
+            {/* Header tab/actions */}
+            <div className="flex border-b border-white/5 mb-4 text-xs font-mono">
+              <button
+                type="button"
+                onClick={() => setIsAddingMembers(false)}
+                className={`flex-1 pb-2 text-center border-b font-medium transition-all cursor-pointer ${
+                  !isAddingMembers
+                    ? "border-blue-500 text-blue-400"
+                    : "border-transparent text-slate-500 hover:text-slate-350"
+                }`}
+              >
+                {t("conversations.groupMembersList")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsAddingMembers(true)}
+                className={`flex-1 pb-2 text-center border-b font-medium transition-all cursor-pointer ${
+                  isAddingMembers
+                    ? "border-blue-500 text-blue-400"
+                    : "border-transparent text-slate-500 hover:text-slate-350"
+                }`}
+              >
+                {t("conversations.addMembersTitle")}
+              </button>
+            </div>
+
+            {!isAddingMembers ? (
+              /* Danh sách thành viên hiện tại */
+              <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+                {activeConversationDetails.members?.map((m) => {
+                  const isMe = m.workspaceMemberId === myMemberId;
+                  return (
+                    <div
+                      key={m.workspaceMemberId}
+                      className="flex items-center justify-between p-2.5 rounded-lg border border-white/5 bg-white/[0.01] text-xs font-mono"
+                    >
+                      <div className="flex items-center gap-2">
+                        {m.avatarUrl ? (
+                          <img
+                            src={m.avatarUrl}
+                            alt={m.fullName}
+                            className="w-5 h-5 rounded-full object-cover border border-white/10"
+                          />
+                        ) : (
+                          <div className="w-5 h-5 rounded-full bg-zinc-800 border border-white/10 flex items-center justify-center font-bold text-[10px] text-zinc-400 uppercase">
+                            {(m.fullName || "U").charAt(0)}
+                          </div>
+                        )}
+                        <span className="truncate max-w-[180px] text-slate-200 font-medium">
+                          {m.fullName} {isMe && <span className="text-[10px] text-slate-500 italic">({t("conversations.youLabel") || "You"})</span>}
+                        </span>
+                      </div>
+                      
+                      {!isMe && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveMember(m.workspaceMemberId)}
+                          className="p-1 hover:bg-rose-500/10 text-slate-500 hover:text-rose-400 rounded transition-all cursor-pointer"
+                          title={t("conversations.removeBtn")}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              /* Màn hình thêm thành viên mới */
+              <form onSubmit={handleAddMembersSubmit} className="space-y-4">
+                <div className="space-y-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
+                  {workspaceMembersList
+                    ?.filter((m) => {
+                      const mId = Number(m.workspaceMemberId || m.id);
+                      const isAlreadyIn = activeConversationDetails.members?.some(
+                        (existing) => existing.workspaceMemberId === mId
+                      );
+                      return mId && mId !== myMemberId && !isAlreadyIn;
+                    })
+                    .map((m) => {
+                      const mId = Number(m.workspaceMemberId || m.id);
+                      const isSelected = selectedNewMembers.includes(mId);
+                      const displayName = m.resource?.fullName || m.fullName || m.name || `Thành viên ${mId}`;
+
+                      return (
+                        <label
+                          key={mId}
+                          className={`flex items-center justify-between p-2.5 rounded-lg border text-xs font-mono transition-all cursor-pointer ${
+                            isSelected
+                              ? "bg-blue-500/10 border-blue-500/30 text-blue-400"
+                              : "bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/[0.04]"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="w-5 h-5 rounded-full bg-zinc-800 border border-white/10 flex items-center justify-center font-bold text-[10px] text-zinc-400 uppercase">
+                              {displayName.charAt(0)}
+                            </div>
+                            <span className="truncate max-w-[180px]">{displayName}</span>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleNewMemberSelection(mId)}
+                            className="rounded border-white/10 text-blue-600 focus:ring-0 cursor-pointer"
+                          />
+                        </label>
+                      );
+                    })}
+                  
+                  {workspaceMembersList?.filter((m) => {
+                    const mId = Number(m.workspaceMemberId || m.id);
+                    const isAlreadyIn = activeConversationDetails.members?.some(
+                      (existing) => existing.workspaceMemberId === mId
+                    );
+                    return mId && mId !== myMemberId && !isAlreadyIn;
+                  }).length === 0 && (
+                    <div className="text-center py-6 text-xs text-slate-500 font-mono italic">
+                      {t("conversations.allMembersJoined") || "All workspace members are in this chat."}
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-white/10 pt-4 flex justify-end gap-3 bg-transparent">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingMembers(false)}
+                    className="px-4 py-2 border border-white/10 rounded-md bg-white/5 text-slate-350 hover:bg-white/10 hover:text-white text-sm font-medium transition-all cursor-pointer"
+                  >
+                    {t("common.cancel")}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={selectedNewMembers.length === 0}
+                    className="px-5 py-2 rounded-md bg-slate-200 hover:bg-white disabled:opacity-30 disabled:hover:bg-slate-200 text-neutral-950 text-sm font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-white/5 cursor-pointer"
+                  >
+                    {t("conversations.inviteBtn")}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

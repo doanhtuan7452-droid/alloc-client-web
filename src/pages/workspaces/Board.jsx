@@ -9,9 +9,13 @@ import TaskDetailModal from "./TaskDetailModal";
 import ProjectService from "../../services/ProjectService";
 import TaskService from "../../services/TaskService"; 
 import { useUser } from "../../contexts/UserContext";
+import { useNotification } from "../../contexts/NotificationContext";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 export default function Board() {
-  const { activeProject, tasksList, isLoading, error, searchQuery, fetchTasks } = useOutletContext();
+  const { t } = useLanguage();
+  const { toast } = useNotification();
+  const { activeProject, tasksList, isLoading, error, searchQuery, fetchTasks, workspaceId } = useOutletContext();
   const { hasPermission, currentUser } = useUser();
   
   const [selectedTask, setSelectedTask] = useState(null);
@@ -101,7 +105,7 @@ export default function Board() {
     }
 
     if (!canUpdateTask) {
-      alert("Bạn không có quyền thay đổi trạng thái công việc trong workspace này.");
+      toast.warning(t("board.errNoUpdatePermission"));
       return;
     }
 
@@ -118,7 +122,7 @@ export default function Board() {
 
     const blockingTask = isTaskBlocked(targetTaskId);
     if (blockingTask && newStatus !== "To-do") {
-      alert(`Không thể di chuyển! Nhiệm vụ này phụ thuộc và cần hoàn thành "TASK-${blockingTask.taskId}: ${blockingTask.taskName}" trước.`);
+      toast.warning(t("board.errTaskBlocked").replace("{id}", blockingTask.taskId).replace("{name}", blockingTask.taskName));
       return;
     }
 
@@ -151,9 +155,9 @@ export default function Board() {
         <div className="bg-rose-500/10 p-4 rounded-full border border-rose-500/20 text-rose-400 animate-pulse">
           <EyeOff className="w-8 h-8" />
         </div>
-        <h2 className="text-lg font-bold text-white font-mono uppercase tracking-wider">Access Denied</h2>
+        <h2 className="text-lg font-bold text-white font-mono uppercase tracking-wider">{t("auth.verifyOtp.accessDenied") || "Access Denied"}</h2>
         <p className="text-xs text-slate-500 text-center max-w-sm font-sans">
-          Bạn không có quyền xem danh sách công việc trong không gian làm việc này. Vui lòng liên hệ Quản trị viên.
+          {t("board.errNoViewPermission")}
         </p>
       </div>
     );
@@ -168,7 +172,7 @@ export default function Board() {
           onClick={() => fetchTasks ? fetchTasks() : window.location.reload()} 
           className="px-4 py-2 bg-white/5 border border-white/10 rounded text-xs text-white hover:bg-white/10 transition-all cursor-pointer font-mono uppercase tracking-wider"
         >
-          Tải lại dữ liệu
+          {t("board.reloadBtn")}
         </button>
       </div>
     );
@@ -177,9 +181,9 @@ export default function Board() {
   if (!activeProject) {
     return (
       <div className="flex flex-col items-center justify-center h-[50vh] text-slate-400 gap-4">
-        <h2 className="text-xl font-bold text-white">Không có task nào</h2>
+        <h2 className="text-xl font-bold text-white">{t("board.noTasks")}</h2>
         <p className="text-sm text-slate-500 text-center max-w-sm">
-          Chưa có task nào được tạo trong project này.
+          {t("board.noTasksSub")}
         </p>
       </div>
     );
@@ -215,7 +219,7 @@ export default function Board() {
     };
 
     if (!payload.taskName) {
-      setFormError("Vui lòng nhập tên task");
+      setFormError(t("board.errEmptyTaskName"));
       setIsSubmitting(false);
       return;
     }
@@ -235,17 +239,17 @@ export default function Board() {
       setIsCreateOpen(false);
       if (fetchTasks) fetchTasks();
     } catch (err) {
-      setFormError(err.response?.data?.message || "Lỗi tạo nhiệm vụ.");
+      setFormError(err.response?.data?.message || t("board.errCreateTask"));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const columnsConfig = [
-    { id: "todo", title: "To Do", tasks: getTasksByStatus("To-do"), dotColor: "bg-blue-500", statusVal: "To-do" },
-    { id: "in-progress", title: "In Progress", tasks: getTasksByStatus("In Progress"), dotColor: "bg-cyan-400", statusVal: "In Progress" },
-    { id: "review", title: "Review", tasks: getTasksByStatus("Review"), dotColor: "bg-amber-400", statusVal: "Review" },
-    { id: "done", title: "Done", tasks: getTasksByStatus("Done"), dotColor: "bg-emerald-400", statusVal: "Done" },
+    { id: "todo", title: t("board.todo"), tasks: getTasksByStatus("To-do"), dotColor: "bg-blue-500", statusVal: "To-do" },
+    { id: "in-progress", title: t("board.inProgress"), tasks: getTasksByStatus("In Progress"), dotColor: "bg-cyan-400", statusVal: "In Progress" },
+    { id: "review", title: t("board.review"), tasks: getTasksByStatus("Review"), dotColor: "bg-amber-400", statusVal: "Review" },
+    { id: "done", title: t("board.done"), tasks: getTasksByStatus("Done"), dotColor: "bg-emerald-400", statusVal: "Done" },
   ];
 
   // Helper kiểm tra xem User hiện tại có nằm trong danh sách Assignees hay không
@@ -269,12 +273,12 @@ export default function Board() {
                   ActionIcon={canCreateTask ? Plus : null}
                   onAction={canCreateTask ? () => openCreateModal(col.statusVal) : null}
                 >
-                  {col.tasks.map((t, index) => {
-                    const blockingTask = isTaskBlocked(t.taskId);
+                  {col.tasks.map((task, index) => {
+                    const blockingTask = isTaskBlocked(task.taskId);
                     const isBlocked = !!blockingTask;
 
                     // Lấy danh sách assignees của task hiện tại
-                    const assignees = taskAssigneesMap[t.taskId] || [];
+                    const assignees = taskAssigneesMap[task.taskId] || [];
 
                     // Kiểm tra xem User hiện tại có được assign không
                     const isAssignedToMe = Boolean(
@@ -287,8 +291,8 @@ export default function Board() {
 
                     return (
                       <Draggable 
-                        key={t.taskId.toString()} 
-                        draggableId={t.taskId.toString()} 
+                        key={task.taskId.toString()} 
+                        draggableId={task.taskId.toString()} 
                         index={index}
                         isDragDisabled={!canUpdateTask || isBlocked}
                       >
@@ -305,16 +309,19 @@ export default function Board() {
                             className="mb-4 last:mb-0 transition-shadow duration-150 relative group"
                           >
                             {isBlocked && (
-                              <div className="absolute top-2 right-2 bg-rose-950/80 border border-rose-500/30 text-rose-400 p-1 rounded z-10 opacity-80 group-hover:opacity-100 transition-opacity" title={`Bị khóa bởi Task-${blockingTask.taskId}`}>
+                              <div className="absolute top-2 right-2 bg-rose-950/80 border border-rose-500/30 text-rose-400 p-1 rounded z-10 opacity-80 group-hover:opacity-100 transition-opacity" title={t("board.blockedBy").replace("{id}", blockingTask.taskId)}>
                                 <Lock size={12} className="animate-pulse" />
                               </div>
                             )}
                             <TaskCard 
-                              task={t} 
-                              assignees={assignees}
-                              isAssignedToMe={isAssignedToMe}
-                              onClick={() => setSelectedTask(t)} 
-                            />
+                               task={task} 
+                               assignees={assignees}
+                               isAssignedToMe={isAssignedToMe}
+                               onClick={() => setSelectedTask(task)} 
+                               projectId={activeProject?.projectId}
+                               workspaceId={workspaceId}
+                               onAssignChange={fetchTasks}
+                             />
                           </div>
                         )}
                       </Draggable>
@@ -351,7 +358,7 @@ export default function Board() {
           >
             <div className="flex justify-between items-center px-6 py-4 border-b border-white/10 bg-white/[0.01]">
               <h3 className="text-xs font-mono font-bold flex items-center gap-2 text-blue-400 uppercase tracking-wider">
-                <Plus className="w-4 h-4" /> Create New Task
+                <Plus className="w-4 h-4" /> {t("board.createTaskTitle")}
               </h3>
               <button 
                 type="button"
@@ -370,7 +377,7 @@ export default function Board() {
               )}
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Task Name *</label>
+                <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">{t("board.taskNameRequired")}</label>
                 <input 
                   type="text" 
                   name="taskName" 
@@ -383,14 +390,14 @@ export default function Board() {
 
               <div className="p-3 bg-zinc-900/60 border border-white/5 rounded-lg space-y-3">
                 <span className="text-[10px] font-mono uppercase text-blue-400 flex items-center gap-1">
-                  <LinkIcon size={12}/> Thiết lập Ràng buộc (Tùy chọn)
+                  <LinkIcon size={12}/> {t("board.dependenciesTitle")}
                 </span>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="text-[9px] font-mono text-zinc-400">Task Tiền Đề</label>
+                    <label className="text-[9px] font-mono text-zinc-400">{t("board.predecessorTask")}</label>
                     <div className="relative">
                       <select name="predecessorTaskId" className="w-full pl-2 pr-6 py-1.5 bg-neutral-950 border border-white/10 rounded text-xs text-zinc-200 focus:outline-none focus:border-blue-500 appearance-none cursor-pointer">
-                        <option value="">-- Không có --</option>
+                        <option value="">{t("board.noPredecessor")}</option>
                         {localTasks.map(tk => (
                           <option key={tk.taskId} value={tk.taskId}>TASK-{tk.taskId}: {tk.taskName}</option>
                         ))}
@@ -399,11 +406,11 @@ export default function Board() {
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[9px] font-mono text-zinc-400">Loại Ràng Buộc</label>
+                    <label className="text-[9px] font-mono text-zinc-400">{t("board.dependencyType")}</label>
                     <div className="relative">
                       <select name="dependencyType" className="w-full pl-2 pr-6 py-1.5 bg-neutral-950 border border-white/10 rounded text-xs text-zinc-200 focus:outline-none focus:border-blue-500 appearance-none cursor-pointer">
-                        <option value="Finish-to-Start">Finish-to-Start</option>
-                        <option value="Start-to-Start">Start-to-Start</option>
+                        <option value="FS">Finish-to-Start</option>
+                        <option value="SS">Start-to-Start</option>
                       </select>
                       <ChevronDown className="w-3 h-3 text-slate-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
                     </div>
@@ -413,7 +420,7 @@ export default function Board() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Status</label>
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">{t("board.status")}</label>
                   <div className="relative">
                     <select 
                       name="status" 
@@ -433,7 +440,7 @@ export default function Board() {
 
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                    <ShieldAlert className="w-3 h-3 text-slate-500" /> Priority
+                    <ShieldAlert className="w-3 h-3 text-slate-500" /> {t("board.priority")}
                   </label>
                   <div className="relative">
                     <select 
@@ -455,7 +462,7 @@ export default function Board() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                    <Calendar className="w-3 h-3 text-slate-500" /> Start Date *
+                    <Calendar className="w-3 h-3 text-slate-500" /> {t("board.startDateRequired")}
                   </label>
                   <input 
                     type="date" 
@@ -468,7 +475,7 @@ export default function Board() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                    <Calendar className="w-3 h-3 text-slate-500" /> End Date *
+                    <Calendar className="w-3 h-3 text-slate-500" /> {t("board.endDateRequired")}
                   </label>
                   <input 
                     type="date" 
@@ -482,7 +489,7 @@ export default function Board() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Duration Type</label>
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">{t("board.durationType")}</label>
                   <div className="relative">
                     <select 
                       name="durationType" 
@@ -498,7 +505,7 @@ export default function Board() {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Estimated Value</label>
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">{t("board.estimatedValue")}</label>
                   <input 
                     type="number" 
                     name="estimatedValue" 
@@ -514,7 +521,7 @@ export default function Board() {
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                    <BarChart2 className="w-3 h-3 text-slate-500" /> Complexity
+                    <BarChart2 className="w-3 h-3 text-slate-500" /> {t("board.complexity")}
                   </label>
                   <div className="relative">
                     <select 
@@ -532,7 +539,7 @@ export default function Board() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Skill Level</label>
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400">{t("board.skillLevel")}</label>
                   <div className="relative">
                     <select 
                       name="requiredSkillLevel" 
@@ -550,7 +557,7 @@ export default function Board() {
 
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                    <Users className="w-3 h-3 text-slate-500" /> Team Size
+                    <Users className="w-3 h-3 text-slate-500" /> {t("board.teamSize")}
                   </label>
                   <input 
                     type="number" 
@@ -571,7 +578,7 @@ export default function Board() {
                   className="px-4 py-2 text-xs font-mono uppercase tracking-wider text-slate-400 hover:text-white transition-colors cursor-pointer"
                   disabled={isSubmitting}
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
                 <button 
                   type="submit" 
@@ -580,10 +587,10 @@ export default function Board() {
                 >
                   {isSubmitting ? (
                     <>
-                      <Loader2 size={14} className="animate-spin" /> Creating...
+                      <Loader2 size={14} className="animate-spin" /> {t("board.creatingBtn")}
                     </>
                   ) : (
-                    "Create Task"
+                    t("board.createTaskBtn")
                   )}
                 </button>
               </div>

@@ -466,14 +466,3 @@ export async function askAI(data) {
 
   return JSON.parse(JSON.stringify(newInsight));
 }
-
-export async function fetchProjectAIInsights(projectId, page = 1, pageSize = 20) {
-  await delay();
-  const insights = aiInsights[parseInt(projectId)] || [];
-  const sorted = [...insights].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  const totalItems = sorted.length;
-  const totalPages = Math.max(Math.ceil(totalItems / pageSize), 1);
-  const startIdx = (page - 1) * pageSize;
-  const items = sorted.slice(startIdx, startIdx + pageSize);
-  return { page, pageSize, totalItems, totalPages, items: JSON.parse(JSON.stringify(items)) };
-}

@@ -1,8 +1,12 @@
 import { useState, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import AuthService from "../../services/AuthService";
+import { useNotification } from "../../contexts/NotificationContext";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 const VerifyOTP = () => {
+  const { t } = useLanguage();
+  const { toast } = useNotification();
   const [otp, setOtp] = useState(new Array(6).fill(""));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -49,7 +53,7 @@ const VerifyOTP = () => {
     e.preventDefault();
     const code = otp.join("");
     if (code.length < 6) {
-      setError("Vui lòng nhập đủ 6 số.");
+      setError(t("auth.verifyOtp.enterSixDigits"));
       return;
     }
     
@@ -60,7 +64,7 @@ const VerifyOTP = () => {
       await AuthService.verifyOtp({ email, code });
       navigate("/login/email");
     } catch (verifyError) {
-      setError(verifyError.message || "Xác thực OTP thất bại.");
+      setError(verifyError.message || t("auth.verifyOtp.failed"));
     } finally {
       setLoading(false);
     }
@@ -70,10 +74,10 @@ const VerifyOTP = () => {
     setError("");
     AuthService.requestOtp({ email })
       .then(() => {
-        alert("Đã gửi lại mã OTP mới vào email của bạn.");
+        toast.success(t("auth.verifyOtp.resendSuccess"));
       })
       .catch((requestError) => {
-        setError(requestError.message || "Không thể gửi lại OTP.");
+        setError(requestError.message || t("auth.verifyOtp.resendFailed"));
       });
   };
 
@@ -95,13 +99,13 @@ const VerifyOTP = () => {
         <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
         </svg>
-        Quay lại
+        {t("auth.login.backBtn")}
       </button>
 
       <div className="text-center mb-8">
-        <h2 className="text-2xl font-semibold tracking-wide mb-2">Nhập mã OTP</h2>
+        <h2 className="text-2xl font-semibold tracking-wide mb-2">{t("auth.verifyOtp.title")}</h2>
         <p className="text-gray-400 text-sm">
-          Mã 6 số đã được gửi tới email <br />
+          {t("auth.verifyOtp.emailSentMsg")} <br />
           <span className="text-blue-400 font-medium">{email}</span>
         </p>
       </div>
@@ -134,13 +138,13 @@ const VerifyOTP = () => {
 
         <div className="flex justify-center -mt-2">
           <span className="text-sm text-gray-400">
-            Chưa nhận được mã?{" "}
+            {t("auth.verifyOtp.notReceived")}{" "}
             <button
               type="button"
               onClick={handleResend}
               className="text-blue-400 hover:text-blue-300 transition-colors"
             >
-              Gửi lại
+              {t("auth.verifyOtp.resendLink")}
             </button>
           </span>
         </div>
@@ -150,7 +154,7 @@ const VerifyOTP = () => {
           disabled={loading}
           className="mt-2 w-full py-3 px-5 text-base font-medium bg-blue-500 text-white rounded-xl transition-all duration-200 hover:bg-blue-600 shadow-lg shadow-blue-500/30 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {loading ? "Đang xác thực..." : "Xác Thực"}
+          {loading ? t("auth.verifyOtp.verifying") : t("auth.verifyOtp.verifyBtn")}
         </button>
       </form>
     </div>

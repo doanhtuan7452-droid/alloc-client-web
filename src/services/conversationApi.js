@@ -70,3 +70,13 @@ export async function renameConversation(conversationId, name) {
 export async function deleteConversation(conversationId) {
   return axiosClient.delete(`/conversations/${conversationId}`);
 }
+
+export async function addConversationMembers(conversationId, workspaceMemberIds) {
+  return axiosClient.post(`/conversations/${conversationId}/members`, {
+    workspaceMemberIds,
+  });
+}
+
+export async function removeConversationMember(conversationId, memberId) {
+  return axiosClient.delete(`/conversations/${conversationId}/members/${memberId}`);
+}

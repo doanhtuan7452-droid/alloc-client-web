@@ -20,6 +20,12 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
         },
+        "/hubs": {
+          target: new URL(apiBaseUrl).origin,
+          changeOrigin: true,
+          secure: false,
+          ws: true,
+        },
       },
     },
   };

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { X, Loader } from "lucide-react";
 import ProjectService from "../../services/ProjectService";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 export default function CreateProjectModal({
   isOpen,
@@ -8,6 +9,7 @@ export default function CreateProjectModal({
   workspaceId,
   onProjectCreated,
 }) {
+  const { t } = useLanguage();
   const [formData, setFormData] = useState(() => {
     const today = new Date();
     const future = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -56,16 +58,16 @@ export default function CreateProjectModal({
   const validate = () => {
     const newErrors = {};
     if (!formData.projectName.trim()) {
-      newErrors.projectName = "Tên dự án không được để trống.";
+      newErrors.projectName = t("activeProjects.errProjectNameRequired");
     } else if (formData.projectName.length > 255) {
-      newErrors.projectName = "Tên dự án không được vượt quá 255 ký tự.";
+      newErrors.projectName = t("activeProjects.errProjectNameTooLong");
     }
 
     if (!formData.startDate) {
-      newErrors.startDate = "Ngày bắt đầu là bắt buộc.";
+      newErrors.startDate = t("activeProjects.errStartDateRequired");
     }
     if (!formData.endDate) {
-      newErrors.endDate = "Ngày kết thúc là bắt buộc.";
+      newErrors.endDate = t("activeProjects.errEndDateRequired");
     }
 
     if (formData.startDate && formData.endDate) {
@@ -73,21 +75,23 @@ export default function CreateProjectModal({
       const end = new Date(formData.endDate);
       if (end < start) {
         newErrors.endDate =
-          "Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.";
+          t("activeProjects.errEndDateBeforeStart");
       }
     }
 
     if (formData.expectedBudget && parseFloat(formData.expectedBudget) < 0) {
-      newErrors.expectedBudget = "Ngân sách không được nhỏ hơn 0.";
+      newErrors.expectedBudget = t("activeProjects.errBudgetNegative");
     }
     if (formData.totalRevenue && parseFloat(formData.totalRevenue) < 0) {
-      newErrors.totalRevenue = "Doanh thu không được nhỏ hơn 0.";
+      newErrors.totalRevenue = t("activeProjects.errRevenueNegative");
     }
-    if (
-      formData.exchangeRateToUSD &&
-      parseFloat(formData.exchangeRateToUSD) <= 0
-    ) {
-      newErrors.exchangeRateToUSD = "Tỷ giá phải lớn hơn 0.";
+    if (formData.exchangeRateToUSD) {
+      const rate = parseFloat(formData.exchangeRateToUSD);
+      if (isNaN(rate) || rate <= 0) {
+        newErrors.exchangeRateToUSD = t("activeProjects.errExchangeRateInvalid");
+      } else if (rate > 999999.999999999999) {
+        newErrors.exchangeRateToUSD = t("activeProjects.errExchangeRateTooLarge");
+      }
     }
 
     setErrors(newErrors);
@@ -101,12 +105,19 @@ export default function CreateProjectModal({
     if (!validate()) return;
 
     if (!workspaceId) {
-      setGeneralError("Thiếu workspaceId để tạo dự án.");
+      setGeneralError(t("activeProjects.errMissingWorkspaceId"));
       return;
     }
 
     setIsSubmitting(true);
     try {
+      let exchangeRate = formData.exchangeRateToUSD ? parseFloat(formData.exchangeRateToUSD) : null;
+      if (exchangeRate === null || isNaN(exchangeRate)) {
+        if (formData.originalCurrencyCode === "VND") exchangeRate = 0.00004;
+        else if (formData.originalCurrencyCode === "EUR") exchangeRate = 1.08;
+        else exchangeRate = 1.0;
+      }
+
       const payload = {
         projectName: formData.projectName,
         startDate: formData.startDate,
@@ -115,7 +126,7 @@ export default function CreateProjectModal({
         expectedBudget: Number(formData.expectedBudget || 0),
         totalRevenue: Number(formData.totalRevenue || 0),
         originalCurrencyCode: formData.originalCurrencyCode,
-        exchangeRateToUSD: Number(formData.exchangeRateToUSD || 1),
+        exchangeRateToUSD: exchangeRate,
         status: formData.status,
         baselineData: formData.projectDescription || null,
       };
@@ -126,13 +137,14 @@ export default function CreateProjectModal({
       onClose();
     } catch (err) {
       setIsSubmitting(false);
-      if (err.message === "ProjectNameExists") {
+      if (err.message === "ProjectNameExists" || err.response?.data?.message === "ProjectNameExists" || err.response?.status === 409) {
         setErrors((prev) => ({
           ...prev,
-          projectName: "Tên dự án đã tồn tại trong Workspace này.",
+          projectName: t("activeProjects.errProjectNameExists"),
         }));
       } else {
-        setGeneralError("Lỗi hệ thống khi tạo dự án. Vui lòng thử lại.");
+        const errorMsg = err.response?.data?.message || err.response?.data?.title || t("activeProjects.errSystemCreateProject");
+        setGeneralError(errorMsg);
         console.error("Error creating project:", err);
       }
     }
@@ -145,7 +157,7 @@ export default function CreateProjectModal({
         {/* Modal Header */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-white/10 bg-white/5">
           <h3 className="text-lg font-bold text-content-primary">
-            Create New Project
+            {t("activeProjects.createProjectModalTitle")}
           </h3>
           <button
             type="button"
@@ -170,7 +182,7 @@ export default function CreateProjectModal({
           {/* Project Name */}
           <div className="space-y-1.5">
             <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">
-              Project Name *
+              {t("activeProjects.projectNameRequired")}
             </label>
             <input
               type="text"
@@ -193,7 +205,7 @@ export default function CreateProjectModal({
             {/* Methodology */}
             <div className="space-y-1.5">
               <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">
-                Methodology
+                {t("activeProjects.methodology")}
               </label>
               <select
                 name="methodology"
@@ -212,7 +224,7 @@ export default function CreateProjectModal({
             {/* Status */}
             <div className="space-y-1.5">
               <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">
-                Initial Status
+                {t("activeProjects.initialStatus")}
               </label>
               <select
                 name="status"
@@ -233,7 +245,7 @@ export default function CreateProjectModal({
             {/* Currency */}
             <div className="space-y-1.5">
               <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">
-                Currency
+                {t("activeProjects.currency")}
               </label>
               <select
                 name="originalCurrencyCode"
@@ -250,7 +262,7 @@ export default function CreateProjectModal({
             {/* Expected Budget */}
             <div className="space-y-1.5 col-span-2">
               <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">
-                Expected Budget
+                {t("activeProjects.expectedBudget")}
               </label>
               <input
                 type="number"
@@ -274,7 +286,7 @@ export default function CreateProjectModal({
             {/* Total Revenue */}
             <div className="space-y-1.5">
               <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">
-                Total Revenue
+                {t("activeProjects.totalRevenue")}
               </label>
               <input
                 type="number"
@@ -296,7 +308,7 @@ export default function CreateProjectModal({
             {/* Exchange Rate to USD */}
             <div className="space-y-1.5">
               <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">
-                Exchange Rate to USD
+                {t("activeProjects.exchangeRateToUSD")}
               </label>
               <input
                 type="number"
@@ -322,7 +334,7 @@ export default function CreateProjectModal({
             {/* Start Date */}
             <div className="space-y-1.5">
               <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">
-                Start Date *
+                {t("activeProjects.startDateRequired")}
               </label>
               <input
                 type="date"
@@ -343,7 +355,7 @@ export default function CreateProjectModal({
             {/* End Date */}
             <div className="space-y-1.5">
               <label className="text-xs font-mono text-content-muted uppercase tracking-wider block">
-                End Date *
+                {t("activeProjects.endDateRequired")}
               </label>
               <input
                 type="date"
@@ -368,9 +380,9 @@ export default function CreateProjectModal({
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 border border-white/10 rounded-md bg-white/5 text-slate-350 hover:bg-white/10 hover:text-white text-sm font-medium transition-all cursor-pointer"
+              className="px-4 py-2 border border-white/10 rounded-md bg-white/5 text-slate-355 hover:bg-white/10 hover:text-white text-sm font-medium transition-all cursor-pointer"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               type="submit"
@@ -378,7 +390,7 @@ export default function CreateProjectModal({
               className="px-5 py-2 rounded-md bg-slate-200 hover:bg-white text-neutral-950 text-sm font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-white/5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               {isSubmitting && <Loader className="w-4 h-4 animate-spin" />}
-              {isSubmitting ? "Creating..." : "Create Project"}
+              {isSubmitting ? t("activeProjects.creatingBtn") : t("activeProjects.createProjectBtn")}
             </button>
           </div>
         </form>

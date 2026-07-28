@@ -118,15 +118,9 @@ export default function Gantt() {
         <div className="bg-white/[0.03] border border-white/10 rounded-xl m-6 flex flex-col items-center justify-center p-12 text-slate-400 min-h-[300px]">
           <Calendar className="w-12 h-12 text-slate-500 mb-4" />
           <h3 className="text-lg font-bold text-white mb-1">Không có công việc nào</h3>
-          <p className="text-sm text-slate-500 text-center max-w-sm mb-6">
+          <p className="text-sm text-slate-500 text-center max-w-sm">
             Dự án này chưa có công việc nào được cấu hình. Vui lòng chuyển sang tab Board để khởi tạo công việc đầu tiên.
           </p>
-          <button
-            onClick={() => navigate(`/workspaces/board?workspaceId=${activeProject.workspaceId}&projectId=${activeProject.projectId}`)}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm transition-all cursor-pointer"
-          >
-            Đến trang Kanban Board
-          </button>
         </div>
       ) : (
         <div className="bg-white/[0.03] border-t border-white/10 flex-1 overflow-hidden flex">

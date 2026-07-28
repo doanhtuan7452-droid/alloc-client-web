@@ -4,11 +4,17 @@ import { Plus, Loader, LayoutGrid, AlertCircle, X, Loader2, MoreVertical, Edit2,
 import { useUser } from "../../contexts/UserContext";
 import WorkspaceService from "../../services/WorkspaceService";
 import WorkspaceCard from "../../features/workspaces/WorkSpaceCard";
+import WorkspaceCardSkeleton from "../../components/skeletons/WorkspaceCardSkeleton";
+import Skeleton from "../../components/skeletons/Skeleton";
 import CreateProjectModal from "../../features/workspaces/CreateProjectModal";
+import { useNotification } from "../../contexts/NotificationContext";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 export default function WorkspaceListPage() {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const { currentUser } = useUser(); // Lấy thông tin user hiện tại từ context
+  const { toast, confirm } = useNotification();
   
   const [workspaces, setWorkspaces] = useState([]);
   const [projectsMap, setProjectsMap] = useState({});
@@ -19,7 +25,6 @@ export default function WorkspaceListPage() {
   // Quản lý trạng thái đóng/mở menu 3 chấm
   const [activeMenuWsId, setActiveMenuWsId] = useState(null);
   const menuRef = useRef(null);
-
   // Modal tạo dự án hiện tại
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(null);
@@ -106,24 +111,24 @@ export default function WorkspaceListPage() {
       }
     } catch (err) {
       console.error("Error standardizing dashboard data:", err);
-      setError("Không thể tải dữ liệu không gian làm việc. Vui lòng kiểm tra lại kết nối.");
+      setError(t("workspaceList.errLoadData"));
     } finally {
       setIsLoading(false);
     }
   };
-
+ 
   useEffect(() => {
     fetchAllData();
   }, [currentUser]); // Gọi lại nếu thông tin currentUser thay đổi
-
+ 
   const handleWorkspaceNavigate = (workspaceId) => {
     navigate(`/workspaces/active?workspaceId=${workspaceId}`);
   };
-
+ 
   const handleProjectNavigate = (workspaceId, projectId) => {
     navigate(`/workspaces/board?workspaceId=${workspaceId}&projectId=${projectId}`);
   };
-
+ 
   // Mở modal Sửa Workspace
   const handleOpenEditModal = (ws) => {
     setEditWorkspaceId(ws.workspaceId);
@@ -132,7 +137,7 @@ export default function WorkspaceListPage() {
     setIsEditModalOpen(true);
     setActiveMenuWsId(null);
   };
-
+ 
   // API Cập nhật Workspace
   const handleUpdateWorkspace = async (e) => {
     e.preventDefault();
@@ -147,39 +152,43 @@ export default function WorkspaceListPage() {
       await fetchAllData();
     } catch (err) {
       console.error("Error updating workspace:", err);
-      alert(err?.response?.data?.message || "Không thể cập nhật Workspace");
+      toast.error(err?.response?.data?.message || t("workspaceList.errUpdate"));
     } finally {
       setIsSubmitting(false);
     }
   };
-
+ 
   // API Xóa Workspace
   const handleDeleteWorkspace = async (wsId, wsName) => {
     setActiveMenuWsId(null);
-    if (window.confirm(`Bạn có chắc muốn xóa "${wsName}"? Mọi dữ liệu liên quan sẽ bị xóa vĩnh viễn.`)) {
+    const isConfirmed = await confirm(
+      t("workspaceList.confirmDelete").replace("{name}", wsName),
+      t("workspaceList.deleteTitle")
+    );
+    if (isConfirmed) {
       try {
         setIsLoading(true);
         await WorkspaceService.deleteWorkspace(wsId);
         await fetchAllData();
       } catch (err) {
         console.error("Error deleting workspace:", err);
-        alert(err?.response?.data?.message || "Không thể xóa Workspace");
+        toast.error(err?.response?.data?.message || t("workspaceList.errDelete"));
       } finally {
         setIsLoading(false);
       }
     }
   };
-
+ 
   const handleCreateWorkspace = async (e) => {
     e.preventDefault();
     if (!newWorkspaceName.trim()) {
-      setFormError('Vui lòng nhập tên Workspace');
+      setFormError(t("sidebar.errEmptyName"));
       return;
     }
-
+ 
     setIsSubmitting(true);
     setFormError('');
-
+ 
     try {
       const payload = {
         name: newWorkspaceName.trim(),
@@ -199,17 +208,34 @@ export default function WorkspaceListPage() {
       }
     } catch (err) {
       console.error("Error creating workspace:", err);
-      setFormError(err?.response?.data?.message || 'Có lỗi xảy ra khi tạo Workspace.');
+      setFormError(err?.response?.data?.message || t("workspaceList.errCreate"));
     } finally {
       setIsSubmitting(false);
     }
   };
-
+ 
   if (isLoading) {
     return (
-      <div className="fixed inset-0 bg-neutral-950 flex flex-col items-center justify-center gap-3">
-        <Loader className="w-7 h-7 text-blue-500 animate-spin" />
-        <p className="text-xs font-mono text-zinc-500 uppercase tracking-widest">Đang thiết lập không gian...</p>
+      <div className="min-h-screen bg-transparent text-zinc-100 px-4 sm:px-6 py-12 flex justify-center">
+        <div className="w-full max-w-4xl space-y-8 animate-pulse">
+          {/* Header Skeleton */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border-default/40 pb-6">
+            <div className="space-y-2 flex-1">
+              <Skeleton variant="text" className="h-8 w-60 sm:h-9" />
+              <Skeleton variant="text" className="h-4 w-96 mt-1" />
+            </div>
+            <div className="shrink-0">
+              <Skeleton variant="rect" className="h-9 w-32 rounded-lg" />
+            </div>
+          </div>
+
+          {/* Cards Skeleton Grid */}
+          <div className="grid grid-cols-1 gap-6">
+            {[1, 2, 3].map((i) => (
+              <WorkspaceCardSkeleton key={i} />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -221,10 +247,10 @@ export default function WorkspaceListPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-6">
           <div>
             <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">
-              Workspaces Hệ Thống
+              {t("workspaceList.title")}
             </h1>
             <p className="text-xs text-zinc-400 mt-1">
-              Quản lý các không gian làm việc hiện tại và truy cập nhanh vào các dự án đang thực thi.
+              {t("workspaceList.subTitle")}
             </p>
           </div>
           
@@ -233,7 +259,7 @@ export default function WorkspaceListPage() {
               onClick={() => setIsWsModalOpen(true)}
               className="flex items-center justify-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs font-bold transition-all border border-white/5 shadow-md cursor-pointer"
             >
-              <Plus className="w-4 h-4 text-blue-400" /> Tạo Workspace mới
+              <Plus className="w-4 h-4 text-blue-400" /> {t("workspaceList.createNew")}
             </button>
           </div>
         </div>
@@ -248,14 +274,14 @@ export default function WorkspaceListPage() {
         {workspaces.length === 0 ? (
           <div className="border border-dashed border-white/5 rounded-2xl p-16 flex flex-col items-center justify-center text-center max-w-md mx-auto">
             <LayoutGrid className="w-10 h-10 text-zinc-700 mb-3" />
-            <h3 className="text-sm font-bold text-zinc-300">Không tìm thấy Không gian làm việc</h3>
-            <p className="text-xs text-zinc-500 mt-1 mb-6">Tài khoản của bạn chưa liên kết với bất cứ Workspace nào.</p>
+            <h3 className="text-sm font-bold text-zinc-300">{t("workspaceList.notFound")}</h3>
+            <p className="text-xs text-zinc-500 mt-1 mb-6">{t("workspaceList.notFoundSubText")}</p>
             
             <button
               onClick={() => setIsWsModalOpen(true)}
               className="flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all shadow-lg cursor-pointer"
             >
-              <Plus className="w-4 h-4 stroke-[2.5]" /> Khởi tạo Workspace đầu tiên
+              <Plus className="w-4 h-4 stroke-[2.5]" /> {t("workspaceList.createFirst")}
             </button>
           </div>
         ) : (
@@ -301,7 +327,7 @@ export default function WorkspaceListPage() {
                             }}
                             className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white text-left cursor-pointer"
                           >
-                            <Edit2 size={13} /> Chỉnh sửa
+                            <Edit2 size={13} /> {t("common.edit")}
                           </button>
                           <button
                             type="button"
@@ -311,7 +337,7 @@ export default function WorkspaceListPage() {
                             }}
                             className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 text-left cursor-pointer"
                           >
-                            <Trash2 size={13} /> Xóa Workspace
+                            <Trash2 size={13} /> {t("workspaceList.deleteTitle")}
                           </button>
                         </div>
                       )}
@@ -336,7 +362,7 @@ export default function WorkspaceListPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md bg-neutral-900 border border-white/10 rounded-xl shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-              <h3 className="text-base font-bold text-white">Tạo Workspace Mới</h3>
+              <h3 className="text-base font-bold text-white">{t("sidebar.createWorkspace")}</h3>
               <button 
                 onClick={() => setIsWsModalOpen(false)}
                 className="p-1 hover:bg-white/5 text-slate-400 hover:text-white rounded-md transition-colors cursor-pointer"
@@ -353,12 +379,12 @@ export default function WorkspaceListPage() {
               )}
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">Tên Không gian làm việc</label>
+                <label className="text-xs font-semibold text-slate-300">{t("sidebar.workspaceName")}</label>
                 <input
                   type="text"
                   value={newWorkspaceName}
                   onChange={(e) => setNewWorkspaceName(e.target.value)}
-                  placeholder="Ví dụ: Dự án Tốt Nghiệp, Công ty ABC..."
+                  placeholder={t("sidebar.workspaceNamePlaceholder")}
                   className="w-full px-3.5 py-2 text-sm bg-white/[0.04] border border-white/10 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
                   maxLength={50}
                   disabled={isSubmitting}
@@ -367,15 +393,15 @@ export default function WorkspaceListPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">Loại hình</label>
+                <label className="text-xs font-semibold text-slate-300">{t("sidebar.workspaceType")}</label>
                 <select
                   value={workspaceType}
                   onChange={(e) => setWorkspaceType(e.target.value)}
                   className="w-full px-3 py-2 text-sm bg-neutral-800 border border-white/10 rounded-md text-white focus:outline-none focus:border-blue-500 transition-colors"
                   disabled={isSubmitting}
                 >
-                  <option value="Company">Company (Doanh nghiệp)</option>
-                  <option value="Personal">Personal (Cá nhân)</option>
+                  <option value="Company">{t("sidebar.companyType")}</option>
+                  <option value="Personal">{t("sidebar.personalType")}</option>
                 </select>
               </div>
 
@@ -386,14 +412,14 @@ export default function WorkspaceListPage() {
                   className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white transition-colors cursor-pointer"
                   disabled={isSubmitting}
                 >
-                  Hủy
+                  {t("common.cancel")}
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-md text-sm font-medium transition-all shadow-[0_0_15px_rgba(59,130,246,0.3)] disabled:opacity-50 cursor-pointer"
                 >
-                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Tạo không gian'}
+                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : t("sidebar.createBtn")}
                 </button>
               </div>
             </form>
@@ -406,7 +432,7 @@ export default function WorkspaceListPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md bg-neutral-900 border border-white/10 rounded-xl shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-              <h3 className="text-base font-bold text-white">Chỉnh sửa Workspace</h3>
+              <h3 className="text-base font-bold text-white">{t("workspaceList.editWorkspace")}</h3>
               <button 
                 onClick={() => setIsEditModalOpen(false)}
                 className="p-1 hover:bg-white/5 text-slate-400 hover:text-white rounded-md transition-colors cursor-pointer"
@@ -417,7 +443,7 @@ export default function WorkspaceListPage() {
 
             <form onSubmit={handleUpdateWorkspace} className="p-5 space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">Tên Không gian làm việc</label>
+                <label className="text-xs font-semibold text-slate-300">{t("sidebar.workspaceName")}</label>
                 <input
                   type="text"
                   value={editWorkspaceName}
@@ -430,15 +456,15 @@ export default function WorkspaceListPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">Loại hình</label>
+                <label className="text-xs font-semibold text-slate-300">{t("sidebar.workspaceType")}</label>
                 <select
                   value={editWorkspaceType}
                   onChange={(e) => setEditWorkspaceType(e.target.value)}
                   className="w-full px-3 py-2 text-sm bg-neutral-800 border border-white/10 rounded-md text-white focus:outline-none focus:border-blue-500 transition-colors"
                   disabled={isSubmitting}
                 >
-                  <option value="Company">Company (Doanh nghiệp)</option>
-                  <option value="Personal">Personal (Cá nhân)</option>
+                  <option value="Company">{t("sidebar.companyType")}</option>
+                  <option value="Personal">{t("sidebar.personalType")}</option>
                 </select>
               </div>
 
@@ -449,14 +475,14 @@ export default function WorkspaceListPage() {
                   className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white transition-colors cursor-pointer"
                   disabled={isSubmitting}
                 >
-                  Hủy
+                  {t("common.cancel")}
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-md text-sm font-medium transition-all cursor-pointer"
                 >
-                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : 'Lưu thay đổi'}
+                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : t("workspaceList.saveChanges")}
                 </button>
               </div>
             </form>

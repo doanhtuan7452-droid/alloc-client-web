@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Camera, Save, Lock, User, Clock, Phone, MapPin } from 'lucide-react';
 import AuthService from '../../services/AuthService';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 export default function Profile() {
+  const { t } = useLanguage();
+
   const [profileData, setProfileData] = useState({
-    fullName: "Đang tải...",
+    fullName: "...",
     email: "...",
     phoneNumber: "...",
-    location: "Chưa cập nhật",
+    location: "...",
     timezone: "...",
     avatarUrl: "",
     isSystemAccount: false,
@@ -27,9 +30,9 @@ export default function Profile() {
       if (response) {
         const profile = response.profile || {};
         setProfileData({
-          fullName: profile.fullName || "Chưa thiết lập tên",
-          email: response.email || "Không có dữ liệu",
-          phoneNumber: profile.phoneNumber || "Chưa cập nhật số điện thoại",
+          fullName: profile.fullName || "...",
+          email: response.email || "...",
+          phoneNumber: profile.phoneNumber || "...",
           location: profile.timezone || "Việt Nam", 
           timezone: profile.timezone || "Asia/Ho_Chi_Minh",
           avatarUrl: profile.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.fullName || "U")}`,
@@ -66,9 +69,9 @@ export default function Profile() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold mb-2 text-content-primary">Thông Tin Cá Nhân</h1>
+            <h1 className="text-3xl font-bold mb-2 text-content-primary">{t("profile.title")}</h1>
             <p className="text-content-muted text-sm">
-              Quản lý hồ sơ, địa chỉ liên hệ và cài đặt bảo mật của bạn.
+              {t("profile.subtitle")}
             </p>
           </div>
         </div>
@@ -95,10 +98,15 @@ export default function Profile() {
               
               <div className="w-full space-y-3">
                 <div className="flex items-center gap-3 text-sm text-content-secondary bg-surface/50 p-2.5 rounded-lg border border-border-default capitalize">
-                  <User className="w-4 h-4 text-blue-400" /> Trạng thái: {profileData.accountStatus.toLowerCase()}
+                  <User className="w-4 h-4 text-blue-400" />
+                  {t("profile.statusLabel").replace("{status}", profileData.accountStatus?.toLowerCase?.() ?? profileData.accountStatus)}
                 </div>
                 <div className="flex items-center gap-3 text-sm text-content-secondary bg-surface/50 p-2.5 rounded-lg border border-border-default">
-                  <Clock className="w-4 h-4 text-emerald-400" /> Loại: {profileData.isSystemAccount ? "Hệ thống" : "Người dùng"}
+                  <Clock className="w-4 h-4 text-emerald-400" />
+                  {t("profile.accountTypeLabel").replace(
+                    "{type}",
+                    profileData.isSystemAccount ? t("profile.accountTypeSystem") : t("profile.accountTypeUser")
+                  )}
                 </div>
               </div>
             </div>
@@ -110,13 +118,13 @@ export default function Profile() {
             {/* Form Hồ Sơ */}
             <div className="bg-white/[0.02] backdrop-blur-md border border-white/10 rounded-xl p-6">
               <h3 className="font-bold text-content-primary mb-6 flex items-center gap-2">
-                <User className="w-5 h-5 text-blue-400" /> Hồ sơ năng lực
+                <User className="w-5 h-5 text-blue-400" /> {t("profile.profileSectionTitle")}
               </h3>
               
               <form onSubmit={handleSaveProfile} className="space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div>
-                    <label className="block text-xs text-content-muted mb-2">Họ và tên</label>
+                    <label className="block text-xs text-content-muted mb-2">{t("profile.fullNameLabel")}</label>
                     <input 
                       type="text" 
                       name="fullName"
@@ -126,7 +134,7 @@ export default function Profile() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-content-muted mb-2">Danh xưng (Email)</label>
+                    <label className="block text-xs text-content-muted mb-2">{t("profile.emailLabel")}</label>
                     <input 
                       type="email" 
                       name="email"
@@ -136,7 +144,7 @@ export default function Profile() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-content-muted mb-2">Số điện thoại</label>
+                    <label className="block text-xs text-content-muted mb-2">{t("profile.phoneLabel")}</label>
                     <div className="relative">
                       <Phone className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" />
                       <input 
@@ -149,7 +157,7 @@ export default function Profile() {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs text-content-muted mb-2">Vị trí / Quốc gia</label>
+                    <label className="block text-xs text-content-muted mb-2">{t("profile.locationLabel")}</label>
                     <div className="relative">
                       <MapPin className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-content-muted" />
                       <input 
@@ -164,7 +172,7 @@ export default function Profile() {
                 </div>
 
                 <div>
-                  <label className="block text-xs text-content-muted mb-2">Múi giờ làm việc</label>
+                  <label className="block text-xs text-content-muted mb-2">{t("profile.timezoneLabel")}</label>
                   <input 
                     type="text" 
                     name="timezone"
@@ -176,7 +184,7 @@ export default function Profile() {
 
                 <div className="flex justify-end mt-6">
                   <button type="submit" className="flex items-center gap-2 bg-blue-600/20 border border-blue-500/30 text-blue-400 px-5 py-2.5 rounded-lg hover:bg-blue-600/30 transition-colors text-sm font-medium">
-                    <Save className="w-4 h-4" /> Lưu Thay Đổi
+                    <Save className="w-4 h-4" /> {t("profile.saveBtn")}
                   </button>
                 </div>
               </form>
@@ -185,13 +193,13 @@ export default function Profile() {
             {/* Form Mật khẩu */}
             <div className="bg-white/[0.02] backdrop-blur-md border border-white/10 rounded-xl p-6">
               <h3 className="font-bold text-content-primary mb-6 flex items-center gap-2">
-                <Lock className="w-5 h-5 text-purple-400" /> Thay đổi mật khẩu
+                <Lock className="w-5 h-5 text-purple-400" /> {t("profile.passwordSectionTitle")}
               </h3>
               
               <form onSubmit={handleUpdatePassword} className="space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="md:col-span-2">
-                    <label className="block text-xs text-content-muted mb-2">Mật khẩu hiện tại</label>
+                    <label className="block text-xs text-content-muted mb-2">{t("profile.currentPasswordLabel")}</label>
                     <input 
                       type="password" 
                       name="currentPassword"
@@ -203,7 +211,7 @@ export default function Profile() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-content-muted mb-2">Mật khẩu mới</label>
+                    <label className="block text-xs text-content-muted mb-2">{t("profile.newPasswordLabel")}</label>
                     <input 
                       type="password" 
                       name="newPassword"
@@ -215,7 +223,7 @@ export default function Profile() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-content-muted mb-2">Xác nhận mật khẩu mới</label>
+                    <label className="block text-xs text-content-muted mb-2">{t("profile.confirmPasswordLabel")}</label>
                     <input 
                       type="password" 
                       name="confirmPassword"
@@ -230,7 +238,7 @@ export default function Profile() {
 
                 <div className="flex justify-end mt-4">
                   <button type="submit" className="flex items-center gap-2 bg-purple-600/20 border border-purple-500/30 text-purple-400 px-5 py-2.5 rounded-lg hover:bg-purple-600/30 transition-colors text-sm font-medium">
-                    <Lock className="w-4 h-4" /> Cập Nhật Mật Khẩu
+                    <Lock className="w-4 h-4" /> {t("profile.updatePasswordBtn")}
                   </button>
                 </div>
               </form>

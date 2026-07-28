@@ -64,6 +64,20 @@ axiosClient.interceptors.request.use(
   (error) => Promise.reject(error),
 );
 
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
 axiosClient.interceptors.response.use(
   (response) => response.data,
   async (error) => {
@@ -83,38 +97,67 @@ axiosClient.interceptors.response.use(
       !originalRequest._retry &&
       !isAuthRoute
     ) {
+      originalRequest._retry = true;
+
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            const updatedHeaders = normalizeHeaders(originalRequest);
+            updatedHeaders.Authorization = `Bearer ${token}`;
+            return axiosClient(originalRequest);
+          })
+          .catch((err) => {
+            return Promise.reject(err);
+          });
+      }
+
+      isRefreshing = true;
       const refreshToken = getStoredRefreshToken();
 
-      if (refreshToken) {
-        originalRequest._retry = true;
-
-        try {
-          const refreshResponse = await refreshClient.post(
-            "/auth/refresh-token",
-            { refreshToken },
-          );
-
-          saveAuthTokens(refreshResponse.data);
-
-          const updatedHeaders = normalizeHeaders(originalRequest);
-          if (refreshResponse.data?.accessToken) {
-            updatedHeaders.Authorization = `Bearer ${refreshResponse.data.accessToken}`;
-          }
-
-          return axiosClient(originalRequest);
-        } catch (refreshError) {
-          clearAuthTokens();
-          // Chỉ chuyển hướng nếu chưa ở trang Auth để tránh lặp F5
-          if (typeof window !== "undefined" && !isAlreadyAtAuthPage) {
-            window.location.href = "/login/email";
-          }
-          return Promise.reject(refreshError);
+      if (!refreshToken) {
+        clearAuthTokens();
+        if (typeof window !== "undefined" && !isAlreadyAtAuthPage) {
+          window.location.href = "/login/email";
         }
+        isRefreshing = false;
+        return Promise.reject(error);
+      }
+
+      try {
+        const refreshResponse = await refreshClient.post(
+          "/auth/refresh-token",
+          { refreshToken },
+        );
+
+        saveAuthTokens(refreshResponse.data);
+        const newAccessToken = refreshResponse.data?.accessToken;
+
+        const updatedHeaders = normalizeHeaders(originalRequest);
+        if (newAccessToken) {
+          updatedHeaders.Authorization = `Bearer ${newAccessToken}`;
+        }
+
+        processQueue(null, newAccessToken);
+        isRefreshing = false;
+
+        return axiosClient(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+        clearAuthTokens();
+        isRefreshing = false;
+
+        // Chỉ chuyển hướng nếu chưa ở trang Auth để tránh lặp F5
+        if (typeof window !== "undefined" && !isAlreadyAtAuthPage) {
+          window.location.href = "/login/email";
+        }
+        return Promise.reject(refreshError);
       }
     }
 
-    // 2. SỬA ĐỔI CHÍNH: Chỉ ép F5 về trang login nếu lỗi 401 KHÔNG thuộc luồng Auth 
-    // VÀ người dùng KHÔNG ở sẵn các trang Login/Register
+    // 2. Chỉ ép F5 về trang login nếu lỗi 401 KHÔNG thuộc luồng Auth
+    // VÀ người dùng KHÔNG ở sẵn các trang Login/Register (Trường hợp đã retry mà vẫn 401)
     if (
       error?.response?.status === 401 &&
       typeof window !== "undefined" &&

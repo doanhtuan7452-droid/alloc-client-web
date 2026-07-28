@@ -1,6 +1,8 @@
 import { FolderGit2, Calendar, Layers } from "lucide-react";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 export default function WorkspaceCard({ workspace, projects = [], onWorkspaceClick, onProjectClick }) {
+  const { t } = useLanguage();
   return (
     <div 
       onClick={() => onWorkspaceClick(workspace.workspaceId)}
@@ -19,14 +21,14 @@ export default function WorkspaceCard({ workspace, projects = [], onWorkspaceCli
           </div>
           <p className="text-xs text-zinc-400 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-            Vai trò: <span className="text-zinc-300 font-medium">{workspace.membership?.role?.roleName || "Member"}</span>
+            {t("workspaceList.roleLabel")} <span className="text-zinc-300 font-medium">{workspace.membership?.role?.roleName || "Member"}</span>
           </p>
         </div>
 
         <div className="text-right mr-9">
           <span className="text-xs font-mono text-zinc-400 bg-zinc-800/80 px-2.5 py-1 rounded-full border border-white/5 flex items-center gap-1.5">
             <FolderGit2 className="w-3.5 h-3.5 text-blue-400" />
-            {projects.length} Dự án
+            {projects.length} {t("workspaceList.projectsCount")}
           </span>
         </div>
       </div>
@@ -34,11 +36,11 @@ export default function WorkspaceCard({ workspace, projects = [], onWorkspaceCli
       {/* Projects List Container */}
       <div className="border-t border-white/5 pt-3">
         <h4 className="text-[11px] font-mono text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-          <Layers className="w-3 h-3" /> Danh sách dự án trực thuộc
+          <Layers className="w-3 h-3" /> {t("workspaceList.subProjects")}
         </h4>
         
         {projects.length === 0 ? (
-          <p className="text-xs text-zinc-500 italic py-1">Chưa có dự án nào được tạo.</p>
+          <p className="text-xs text-zinc-500 italic py-1">{t("workspaceList.noProjects")}</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {projects.map((project) => (

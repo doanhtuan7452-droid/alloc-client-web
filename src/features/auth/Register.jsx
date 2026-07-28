@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AuthService from "../../services/AuthService";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 const Register = () => {
+  const { t } = useLanguage();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,21 +27,18 @@ const Register = () => {
       confirmPassword,
     });
     
-    // SỬA ĐOẠN NÀY: Thay vì vào thẳng /workspaces, hãy đá sang trang verify-otp
-    // Truyền thêm state chứa email để bên trang OTP nhận được dữ liệu
     navigate("/login/verify-otp", { state: { email: email } });
-
   } catch (registerError) {
-    setError(registerError.message || "Đăng ký thất bại.");
+    setError(registerError.message || t("auth.register.failed"));
   } finally {
     setLoading(false);
   }
 };
-
+ 
   const handleBack = () => {
     navigate("/login");
   };
-
+ 
   return (
     <div className="bg-white/5 backdrop-blur-md border border-white/10 p-10 rounded-2xl shadow-2xl w-full max-w-[420px] text-white mx-4 transition-all duration-300 hover:border-white/20">
       {/* Nút Quay lại */}
@@ -60,17 +59,17 @@ const Register = () => {
             d="M15 19l-7-7 7-7"
           />
         </svg>
-        Quay lại màn hình chính
+        {t("auth.login.backBtn")}
       </button>
-
+ 
       {/* Tiêu đề */}
       <div className="text-center mb-10">
-        <h2 className="text-2xl font-semibold tracking-wide mb-2">Đăng Ký</h2>
+        <h2 className="text-2xl font-semibold tracking-wide mb-2">{t("auth.register.title")}</h2>
         <p className="text-gray-400 text-sm">
-          Tạo tài khoản Alloc cho Workspace của bạn
+          {t("auth.register.subTitle")}
         </p>
       </div>
-
+ 
       {/* Form */}
       <form onSubmit={handleRegister} className="flex flex-col gap-8">
         {error ? (
@@ -78,7 +77,7 @@ const Register = () => {
             {error}
           </div>
         ) : null}
-
+ 
         {/* Ô nhập Họ và Tên */}
         <div className="relative">
           <input
@@ -87,17 +86,17 @@ const Register = () => {
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-transparent focus:placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-0 focus:bg-white/10 transition-all duration-300 peer"
-            placeholder="Họ và tên"
+            placeholder={t("auth.register.fullName")}
             required
           />
           <label
             htmlFor="fullName"
             className="absolute transition-all duration-300 pointer-events-none -top-6 left-1 text-sm text-gray-400 peer-placeholder-shown:top-3.5 peer-placeholder-shown:left-4 peer-placeholder-shown:text-base peer-focus:-top-6 peer-focus:left-1 peer-focus:text-sm peer-focus:text-blue-400"
           >
-            Họ và tên
+            {t("auth.register.fullName")}
           </label>
         </div>
-
+ 
         {/* Ô nhập Email */}
         <div className="relative">
           <input
@@ -106,17 +105,17 @@ const Register = () => {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-transparent focus:placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-0 focus:bg-white/10 transition-all duration-300 peer"
-            placeholder="ví dụ: name@gmail.com"
+            placeholder={t("auth.login.emailPlaceholder")}
             required
           />
           <label
             htmlFor="email"
             className="absolute transition-all duration-300 pointer-events-none -top-6 left-1 text-sm text-gray-400 peer-placeholder-shown:top-3.5 peer-placeholder-shown:left-4 peer-placeholder-shown:text-base peer-focus:-top-6 peer-focus:left-1 peer-focus:text-sm peer-focus:text-blue-400"
           >
-            Email
+            {t("auth.register.email")}
           </label>
         </div>
-
+ 
         {/* Ô nhập Mật khẩu */}
         <div className="relative">
           <input
@@ -125,14 +124,14 @@ const Register = () => {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 pr-12 text-white placeholder-transparent focus:border-blue-500 focus:outline-none focus:ring-0 focus:bg-white/10 transition-all duration-300 peer"
-            placeholder="Mật khẩu"
+            placeholder={t("auth.register.password")}
             required
           />
           <label
             htmlFor="password"
             className="absolute transition-all duration-300 pointer-events-none -top-6 left-1 text-sm text-gray-400 peer-placeholder-shown:top-3.5 peer-placeholder-shown:left-4 peer-placeholder-shown:text-base peer-focus:-top-6 peer-focus:left-1 peer-focus:text-sm peer-focus:text-blue-400"
           >
-            Mật khẩu
+            {t("auth.register.password")}
           </label>
           <button
             type="button"
@@ -177,7 +176,7 @@ const Register = () => {
             )}
           </button>
         </div>
-
+ 
         {/* Ô nhập Xác nhận mật khẩu */}
         <div className="relative">
           <input
@@ -186,34 +185,34 @@ const Register = () => {
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 pr-12 text-white placeholder-transparent focus:border-blue-500 focus:outline-none focus:ring-0 focus:bg-white/10 transition-all duration-300 peer"
-            placeholder="Xác nhận mật khẩu"
+            placeholder={t("auth.register.confirmPassword")}
             required
           />
           <label
             htmlFor="confirmPassword"
             className="absolute transition-all duration-300 pointer-events-none -top-6 left-1 text-sm text-gray-400 peer-placeholder-shown:top-3.5 peer-placeholder-shown:left-4 peer-placeholder-shown:text-base peer-focus:-top-6 peer-focus:left-1 peer-focus:text-sm peer-focus:text-blue-400"
           >
-            Xác nhận mật khẩu
+            {t("auth.register.confirmPassword")}
           </label>
         </div>
-
+ 
         {/* Nút Xác nhận Đăng ký */}
         <button
           type="submit"
           disabled={loading}
           className="mt-2 w-full py-3 px-5 text-base font-medium bg-blue-500 text-white rounded-xl transition-all duration-200 hover:bg-blue-600 shadow-lg shadow-blue-500/30 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {loading ? "Đang tạo tài khoản..." : "Tạo Tài Khoản"}
+          {loading ? t("auth.register.registering") : t("auth.register.registerBtn")}
         </button>
       </form>
-
+ 
       <div className="mt-6 text-center text-sm text-gray-400">
-        Đã có tài khoản?{" "}
+        {t("auth.register.alreadyHaveAccount")}{" "}
         <button
           onClick={() => navigate("/login")}
           className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
         >
-          Đăng nhập ngay
+          {t("auth.register.signIn")}
         </button>
       </div>
     </div>
