@@ -44,17 +44,6 @@ export default function TaskDetailModal({ task: initialTask, allTasks = [], onCl
   const [dependencies, setDependencies] = useState([]);
   const [attachments, setAttachments] = useState([]);
   const [isUploadingFile, setIsUploadingFile] = useState(false);
-
-  useEffect(() => {
-    if (!task?.taskId) return;
-
-    loadWorkspaceMembers();
-    loadAssignedMembers();
-    fetchComments();
-    fetchDependencies();
-    fetchAttachments();
-  }, [task?.taskId]);
-
   const loadWorkspaceMembers = async () => {
     if (!canManageAssignees) return; 
     setIsLoadingMembers(true);
@@ -164,6 +153,17 @@ export default function TaskDetailModal({ task: initialTask, allTasks = [], onCl
       setAttachments(res || []);
     } catch (err) { console.error(err); }
   };
+
+  useEffect(() => {
+    if (!task?.taskId) return;
+
+    loadWorkspaceMembers();
+    loadAssignedMembers();
+    fetchComments();
+    fetchDependencies();
+    fetchAttachments();
+  }, [task?.taskId]);
+
 
   const handleUploadFile = async (e) => {
     const file = e.target.files[0];

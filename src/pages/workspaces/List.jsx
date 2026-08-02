@@ -41,13 +41,6 @@ export default function List() {
   const canViewBoard = hasPermission("task:view");
   const canUpdateTask = hasPermission("task:update");
 
-  // Fetch assignees cho tất cả các task
-  useEffect(() => {
-    if (tasksList && tasksList.length > 0) {
-      fetchAllAssignees(tasksList);
-    }
-  }, [tasksList]);
-
   const fetchAllAssignees = async (tasks) => {
     try {
       const assigneesPromises = tasks.map(async (t) => {
@@ -70,6 +63,14 @@ export default function List() {
       console.error("Lỗi lấy danh sách assignees cho List view:", err);
     }
   };
+
+  // Fetch assignees cho tất cả các task
+  useEffect(() => {
+    if (tasksList && tasksList.length > 0) {
+      fetchAllAssignees(tasksList);
+    }
+  }, [tasksList]);
+
 
   const toggleSection = (sectionId) => {
     setCollapsedSections((prev) => ({

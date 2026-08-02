@@ -11,21 +11,6 @@ export const UserProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [currentWorkspaceId, setCurrentWorkspaceId] = useState(null);
 
-  useEffect(() => {
-      fetchCurrentUser();
-  }, []);
-  
-
-  useEffect(() => {
-      // Lấy workspaceId từ URL bằng cách thủ công hoặc thông qua window.location
-      const urlParams = new URLSearchParams(window.location.search);
-      const wId = urlParams.get("workspaceId");
-      
-      if (wId && currentUser) {
-          switchWorkspace(parseInt(wId));
-      }
-  }, [currentUser]);
-
   // 1. Lấy thông tin tài khoản hệ thống khi load trang
   const fetchCurrentUser = async () => {
     try {
@@ -95,6 +80,21 @@ export const UserProvider = ({ children }) => {
         setCurrentWorkspaceRole(null);
     }
   };
+
+  useEffect(() => {
+      fetchCurrentUser();
+  }, []);
+  
+
+  useEffect(() => {
+      // Lấy workspaceId từ URL bằng cách thủ công hoặc thông qua window.location
+      const urlParams = new URLSearchParams(window.location.search);
+      const wId = urlParams.get("workspaceId");
+      
+      if (wId && currentUser) {
+          switchWorkspace(parseInt(wId));
+      }
+  }, [currentUser]);
 
   // SỬA TẠI ĐÂY: Nếu role hiện tại trong Workspace là Owner thì tự động cho qua (Bypass)
   const hasPermission = (permissionId) => {

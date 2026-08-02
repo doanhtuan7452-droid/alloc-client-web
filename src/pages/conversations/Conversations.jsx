@@ -780,7 +780,7 @@ export default function Conversations() {
                             
                             {/* 🌟 SỬA ĐOẠN HIỂN THỊ THỜI GIAN TẠI ĐÂY */}
                             <span>
-                              {new Date(msg.createdAt || msg.sentAt || Date.now()).toLocaleString(locale === "vi" ? "vi-VN" : "en-US", {
+                              {new Date(msg.createdAt || msg.sentAt || "1970-01-01").toLocaleString(locale === "vi" ? "vi-VN" : "en-US", {
                                 hour: "2-digit",
                                 minute: "2-digit",
                                 day: "2-digit",

@@ -35,14 +35,6 @@ export default function Board() {
   const canCreateTask = hasPermission("task:create");
   const canUpdateTask = hasPermission("task:update");
 
-  useEffect(() => {
-    if (tasksList) {
-      setLocalTasks(tasksList);
-      fetchAllDependencies(tasksList);
-      fetchAllAssignees(tasksList);
-    }
-  }, [tasksList]);
-
   // Fetch assignees cho toàn bộ danh sách task ở cấp parent (Board)
   const fetchAllAssignees = async (tasks) => {
     try {
@@ -77,6 +69,15 @@ export default function Board() {
       console.error("Lỗi đồng bộ danh sách phụ thuộc dự án:", err);
     }
   };
+
+  useEffect(() => {
+    if (tasksList) {
+      setLocalTasks(tasksList);
+      fetchAllDependencies(tasksList);
+      fetchAllAssignees(tasksList);
+    }
+  }, [tasksList]);
+
 
   // Hàm kiểm tra xem Task có đang bị khóa (Blocked) bởi một task khác chưa Done không
   const isTaskBlocked = (taskId) => {

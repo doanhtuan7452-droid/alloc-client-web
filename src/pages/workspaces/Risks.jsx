@@ -38,6 +38,21 @@ import {
   Legend as ChartLegend
 } from "recharts";
 
+const CustomChartTooltip = ({ active, payload, t }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="glass-card bg-neutral-950/90 border border-white/10 rounded-lg p-2.5 shadow-xl text-[11px] space-y-1">
+        <p className="font-semibold text-zinc-300 border-b border-white/5 pb-1">{payload[0].name}</p>
+        <p className="font-mono text-violet-400 font-bold mt-0.5 flex justify-between items-center gap-4">
+          <span>{t("risks.totalLabel") || "Total"}:</span>
+          <span>{payload[0].value}</span>
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
+
 export default function Risks() {
   const { t } = useLanguage();
   const { toast } = useNotification();
@@ -399,20 +414,6 @@ export default function Risks() {
     return "bg-zinc-800/10 border-zinc-800/30 hover:bg-zinc-800/20";
   };
 
-  const CustomChartTooltip = ({ active, payload }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="glass-card bg-neutral-950/90 border border-white/10 rounded-lg p-2.5 shadow-xl text-[11px] space-y-1">
-          <p className="font-semibold text-zinc-300 border-b border-white/5 pb-1">{payload[0].name}</p>
-          <p className="font-mono text-violet-400 font-bold mt-0.5 flex justify-between items-center gap-4">
-            <span>{t("risks.totalLabel") || "Total"}:</span>
-            <span>{payload[0].value}</span>
-          </p>
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <div className="flex-1 overflow-y-auto h-full p-4 md:p-6 custom-scrollbar bg-[#141414] text-zinc-200">
@@ -759,7 +760,7 @@ export default function Risks() {
                                 />
                               ))}
                             </Pie>
-                            <ChartTooltip content={<CustomChartTooltip />} />
+                            <ChartTooltip content={<CustomChartTooltip t={t} />} />
                           </PieChart>
                         </ResponsiveContainer>
                         {/* Custom status legend */}
@@ -806,7 +807,7 @@ export default function Risks() {
                               width={60}
                               tick={{ fill: "#9ca3af", fontSize: 8 }}
                             />
-                            <ChartTooltip content={<CustomChartTooltip />} />
+                            <ChartTooltip content={<CustomChartTooltip t={t} />} />
                             <Bar
                               dataKey="value"
                               fill="#8b5cf6"

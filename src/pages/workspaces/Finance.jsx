@@ -37,6 +37,42 @@ const CATEGORY_COLORS = {
   "Other Expenses": "#6b7280"         // Gray
 };
 
+const CustomDonutTooltip = ({ active, payload, formatCurrency }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="glass-card-light bg-neutral-950/90 border border-white/10 rounded-lg p-2.5 shadow-xl text-xs">
+        <p className="font-semibold text-slate-200">{payload[0].name}</p>
+        <p className="font-mono text-rose-400 mt-0.5 font-bold">
+          {formatCurrency(payload[0].value)}
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
+
+const CustomTrendTooltip = ({ active, payload, label, formatCurrency, t }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="glass-card-light bg-neutral-950/90 border border-white/10 rounded-lg p-3 shadow-xl text-xs space-y-1.5">
+        <p className="font-semibold text-slate-400 border-b border-white/5 pb-1">{label}</p>
+        {payload.map((item, idx) => (
+          <div key={idx} className="flex justify-between items-center gap-6">
+            <span className="text-slate-400 flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.stroke || item.color }}></span>
+              {item.name}:
+            </span>
+            <span className={`font-mono font-semibold ${item.name === t("finance.chartLegendRevenue") ? "text-emerald-400" : "text-rose-400"}`}>
+              {formatCurrency(item.value)}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
 export default function Finance() {
   const { t } = useLanguage();
 
@@ -292,42 +328,6 @@ export default function Finance() {
 
   const trendData = getTrendData();
 
-  // Custom tooltips cho biểu đồ
-  const CustomDonutTooltip = ({ active, payload }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="glass-card-light bg-neutral-950/90 border border-white/10 rounded-lg p-2.5 shadow-xl text-xs">
-          <p className="font-semibold text-slate-200">{payload[0].name}</p>
-          <p className="font-mono text-rose-400 mt-0.5 font-bold">
-            {formatCurrency(payload[0].value)}
-          </p>
-        </div>
-      );
-    }
-    return null;
-  };
-
-  const CustomTrendTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="glass-card-light bg-neutral-950/90 border border-white/10 rounded-lg p-3 shadow-xl text-xs space-y-1.5">
-          <p className="font-semibold text-slate-400 border-b border-white/5 pb-1">{label}</p>
-          {payload.map((item, idx) => (
-            <div key={idx} className="flex justify-between items-center gap-6">
-              <span className="text-slate-400 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.stroke || item.color }}></span>
-                {item.name}:
-              </span>
-              <span className={`font-mono font-semibold ${item.name === t("finance.chartLegendRevenue") ? "text-emerald-400" : "text-rose-400"}`}>
-                {formatCurrency(item.value)}
-              </span>
-            </div>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <div className="absolute inset-0 flex flex-col overflow-hidden">
@@ -447,7 +447,7 @@ export default function Finance() {
                       axisLine={false}
                       tickFormatter={(v) => formatShortCurrency(v)}
                     />
-                    <ChartTooltip content={<CustomTrendTooltip />} />
+                    <ChartTooltip content={<CustomTrendTooltip formatCurrency={formatCurrency} t={t} />} />
                     <ChartLegend 
                       verticalAlign="top" 
                       align="right" 
@@ -507,7 +507,7 @@ export default function Finance() {
                             <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[entry.rawName] || "#6b7280"} />
                           ))}
                         </Pie>
-                        <ChartTooltip content={<CustomDonutTooltip />} />
+                        <ChartTooltip content={<CustomDonutTooltip formatCurrency={formatCurrency} />} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>

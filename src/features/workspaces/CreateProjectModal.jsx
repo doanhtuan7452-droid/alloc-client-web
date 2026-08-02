@@ -89,7 +89,7 @@ export default function CreateProjectModal({
       const rate = parseFloat(formData.exchangeRateToUSD);
       if (isNaN(rate) || rate <= 0) {
         newErrors.exchangeRateToUSD = t("activeProjects.errExchangeRateInvalid");
-      } else if (rate > 999999.999999999999) {
+      } else if (rate > 999999.999999999) {
         newErrors.exchangeRateToUSD = t("activeProjects.errExchangeRateTooLarge");
       }
     }

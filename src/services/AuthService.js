@@ -57,7 +57,7 @@ const AuthService = {
 
       return await persistAuthResponse(response);
     } catch (error) {
-      throw new Error(extractErrorMessage(error, "Đăng nhập thất bại."));
+      throw new Error(extractErrorMessage(error, "Đăng nhập thất bại."), { cause: error });
     }
   },
 
@@ -73,7 +73,7 @@ const AuthService = {
 
       return await persistAuthResponse(response);
     } catch (error) {
-      throw new Error(extractErrorMessage(error, "Đăng ký thất bại."));
+      throw new Error(extractErrorMessage(error, "Đăng ký thất bại."), { cause: error });
     }
   },
 
@@ -86,7 +86,7 @@ const AuthService = {
 
       return await persistAuthResponse(response);
     } catch (error) {
-      throw new Error(extractErrorMessage(error, "Đăng nhập Google thất bại."));
+      throw new Error(extractErrorMessage(error, "Đăng nhập Google thất bại."), { cause: error });
     }
   },
 
@@ -106,6 +106,7 @@ const AuthService = {
       clearAuthTokens();
       throw new Error(
         extractErrorMessage(error, "Phiên đăng nhập đã hết hạn."),
+        { cause: error }
       );
     }
   },
@@ -114,7 +115,7 @@ const AuthService = {
     try {
       return await axiosClient.post("/auth/request-otp", { email });
     } catch (error) {
-      throw new Error(extractErrorMessage(error, "Không thể gửi OTP."));
+      throw new Error(extractErrorMessage(error, "Không thể gửi OTP."), { cause: error });
     }
   },
 
@@ -125,7 +126,7 @@ const AuthService = {
         code,
       });
     } catch (error) {
-      throw new Error(extractErrorMessage(error, "Xác thực OTP thất bại."));
+      throw new Error(extractErrorMessage(error, "Xác thực OTP thất bại."), { cause: error });
     }
   },
 
@@ -140,7 +141,7 @@ const AuthService = {
     try {
       await axiosClient.post("/auth/revoke/local", { refreshToken });
     } catch (error) {
-      throw new Error(extractErrorMessage(error, "Đăng xuất thất bại."));
+      throw new Error(extractErrorMessage(error, "Đăng xuất thất bại."), { cause: error });
     } finally {
       clearAuthTokens();
     }
@@ -150,7 +151,7 @@ const AuthService = {
     try {
       await axiosClient.post("/auth/revoke/global");
     } catch (error) {
-      throw new Error(extractErrorMessage(error, "Đăng xuất thất bại."));
+      throw new Error(extractErrorMessage(error, "Đăng xuất thất bại."), { cause: error });
     } finally {
       clearAuthTokens();
     }
