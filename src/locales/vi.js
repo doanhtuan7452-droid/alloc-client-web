@@ -892,5 +892,61 @@ export const vi = {
     sendBtnTitle: "Gửi tin nhắn",
     quotaExceededDefault: "Đã đạt giới hạn truy vấn AI hàng tháng.",
     dragResizeTitle: "Kéo rê để chỉnh kích thước danh sách"
+  },
+  landing: {
+    nav: {
+      features: "Tính năng",
+      tech: "Công nghệ",
+      about: "Về chúng tôi",
+      dashboard: "Bảng điều khiển",
+      login: "Đăng nhập",
+      register: "Đăng ký"
+    },
+    hero: {
+      badge: "Phiên bản mới 2026",
+      title: "Quản lý Dự án & Phân bổ Nguồn lực Thông minh",
+      subtitle: "Nâng cao hiệu suất dự án với Kanban Board trực quan, Gantt Chart chuyên nghiệp và sự hỗ trợ mạnh mẽ từ trí tuệ nhân tạo Alloc AI.",
+      ctaPrimary: "Bắt đầu miễn phí",
+      ctaSecondary: "Xem tính năng",
+      usersCount: "+10,000 lập trình viên & quản lý dự án tin dùng"
+    },
+    features: {
+      title: "Tính năng nổi bật của Alloc",
+      subtitle: "Được thiết kế toàn diện để giải quyết các thách thức quản trị nguồn lực và tiến độ dự án.",
+      item1Title: "Không gian làm việc thông minh",
+      item1Desc: "Tạo và quản lý các Workspace Cá nhân & Doanh nghiệp dễ dàng, phân chia phân quyền thành viên rõ ràng.",
+      item2Title: "Kanban & Gantt Tương tác",
+      item2Desc: "Theo dõi tiến độ trực quan bằng bảng Kanban linh hoạt hoặc lập kế hoạch chi tiết với Biểu đồ Gantt trực quan.",
+      item3Title: "Đề xuất nhân sự Alloc AI",
+      item3Desc: "Hệ thống AI tự động đề xuất phân bổ nhân sự phù hợp dựa trên kỹ năng, độ phức tạp công việc và tải lượng hiện tại.",
+      item4Title: "Tài chính & Quản trị Rủi ro",
+      item4Desc: "Theo dõi dòng tiền, chi phí thực tế và tự động dự báo các rủi ro tiềm ẩn của dự án trước khi chúng xảy ra."
+    },
+    aiShowcase: {
+      title: "Trải nghiệm sức mạnh của Alloc AI",
+      subtitle: "Phân bổ nhân sự chưa bao giờ dễ dàng và khách quan đến thế. Trực tiếp mô phỏng gợi ý từ AI của chúng tôi bên dưới:",
+      taskLabel: "Chọn Độ Phức Tạp Công Việc:",
+      skillLabel: "Yêu Cầu Kỹ Năng:",
+      analyzeBtn: "Alloc AI Phân Tích",
+      analyzing: "Đang phân tích nguồn lực...",
+      resultTitle: "Kết quả đề xuất thành viên tối ưu:",
+      scoreLabel: "Độ phù hợp",
+      workloadLabel: "Tải lượng hiện tại",
+      skillsLabel: "Kỹ năng chính",
+      experienceLabel: "Kinh nghiệm"
+    },
+    cta: {
+      title: "Sẵn sàng tối ưu hóa dự án của bạn?",
+      subtitle: "Đăng ký tài khoản Alloc ngay hôm nay để trải nghiệm quy trình quản lý dự án thế hệ mới.",
+      btn: "Trải nghiệm miễn phí ngay"
+    },
+    footer: {
+      desc: "Hệ thống quản lý dự án và tối ưu nguồn lực thế hệ mới được tích hợp Trí tuệ Nhân tạo AI.",
+      product: "Sản phẩm",
+      company: "Công ty",
+      resources: "Tài nguyên",
+      legal: "Pháp lý",
+      rights: "Tất cả quyền được bảo lưu."
+    }
   }
 };

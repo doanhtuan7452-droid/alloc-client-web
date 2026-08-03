@@ -23,10 +23,14 @@ import Profile from "../pages/profile/Profile";
 import AIChatPage from "../pages/ai/AIChatPage";
 import WorkspaceListPage from "../pages/workspaces/WorkspaceListPage";
 import HRManagement from "../pages/hr/HRManagement";
+import LandingPage from "../pages/landing/LandingPage";
 
 export default function AppRouter() {
   return (
     <Routes>
+      {/* Tuyến đường công khai: Landing Page */}
+      <Route path="/" element={<LandingPage />} />
+
       <Route path="/login" element={<LayoutLogin />}>
         <Route index element={<LoginOption />} />
         <Route path="email" element={<LoginEmail />} />
@@ -39,9 +43,7 @@ export default function AppRouter() {
       
       {/* Tuyến đường được bảo vệ - Bắt buộc phải đăng nhập */}
       <Route element={<ProtectedRoute />}>
-        <Route path="/" element={<MainLayout />}>
-          <Route index element={<Navigate to="/workspaces" replace />} />
-          
+        <Route element={<MainLayout />}>
           <Route path="workspaces">
             <Route index element={<WorkspaceListPage />} /> 
             

@@ -892,5 +892,61 @@ export const en = {
     sendBtnTitle: "Send message",
     quotaExceededDefault: "Monthly AI query limit reached.",
     dragResizeTitle: "Drag to resize session list"
+  },
+  landing: {
+    nav: {
+      features: "Features",
+      tech: "Technology",
+      about: "About Us",
+      dashboard: "Dashboard",
+      login: "Sign In",
+      register: "Sign Up"
+    },
+    hero: {
+      badge: "New Release 2026",
+      title: "Smart Project Management & Resource Allocation",
+      subtitle: "Optimize project performance with intuitive Kanban Boards, professional Gantt Charts, and the intelligent support of Alloc AI.",
+      ctaPrimary: "Get Started Free",
+      ctaSecondary: "Explore Features",
+      usersCount: "Trusted by +10,000 developers & project managers"
+    },
+    features: {
+      title: "Outstanding Features of Alloc",
+      subtitle: "Comprehensive solutions designed to tackle resource management and project scheduling challenges.",
+      item1Title: "Smart Workspaces",
+      item1Desc: "Easily create and manage Personal & Company Workspaces with clean member access control.",
+      item2Title: "Interactive Kanban & Gantt",
+      item2Desc: "Track progress visually with a flexible Kanban board or build granular project roadmaps with Gantt charts.",
+      item3Title: "Alloc AI Resource Recommendations",
+      item3Desc: "AI engine automatically suggests optimal member allocations based on developer skills, complexity, and active load.",
+      item4Title: "Financial & Risk Tracking",
+      item4Desc: "Monitor cash flows, real costs, and automatically forecast potential project risks before they occur."
+    },
+    aiShowcase: {
+      title: "Experience the Power of Alloc AI",
+      subtitle: "Resource allocation has never been so seamless and objective. Simulate our AI engine in real-time below:",
+      taskLabel: "Select Task Complexity:",
+      skillLabel: "Skill Requirement:",
+      analyzeBtn: "Run Alloc AI",
+      analyzing: "Analyzing resources...",
+      resultTitle: "Recommended Team Member:",
+      scoreLabel: "Matching Score",
+      workloadLabel: "Current Workload",
+      skillsLabel: "Core Skills",
+      experienceLabel: "Experience"
+    },
+    cta: {
+      title: "Ready to optimize your projects?",
+      subtitle: "Sign up for an Alloc account today to experience next-generation workspace management.",
+      btn: "Start Free Trial Now"
+    },
+    footer: {
+      desc: "Next-generation project management & resource optimization platform powered by AI.",
+      product: "Product",
+      company: "Company",
+      resources: "Resources",
+      legal: "Legal",
+      rights: "All rights reserved."
+    }
   }
 };

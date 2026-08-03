@@ -88,7 +88,8 @@ axiosClient.interceptors.response.use(
     const isAlreadyAtAuthPage =
       typeof window !== "undefined" &&
       (window.location.pathname.includes("/login") ||
-        window.location.pathname.includes("/register"));
+        window.location.pathname.includes("/register") ||
+        window.location.pathname === "/");
 
     // 1. Cố gắng refresh token (Chỉ áp dụng cho các route thông thường cần bảo mật)
     if (

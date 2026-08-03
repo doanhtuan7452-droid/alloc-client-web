@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import AuthService from "../services/AuthService";
 import WorkspaceService from "../services/WorkspaceService";
+import { getStoredRefreshToken } from "../utils/authTokens";
 
 const UserContext = createContext(null);
 
@@ -13,6 +14,12 @@ export const UserProvider = ({ children }) => {
 
   // 1. Lấy thông tin tài khoản hệ thống khi load trang
   const fetchCurrentUser = async () => {
+    const token = getStoredRefreshToken();
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
     try {
       const user = await AuthService.getCurrentUser();
       setCurrentUser(user);
